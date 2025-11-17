@@ -30,13 +30,7 @@ function App() {
     <Routes>
       <Route element={<Layout />}>
         {/* man route */}
-        <Route element={<ProtectManRoutes />}>
-          <Route element={<Main />}>
-            <Route path="/manager/user-list" element={<QLNguoiDung />} />
-            <Route path="/manager/driver-list" element={<QLTaiXe />} />
-            <Route path="/manager/feedback" element={<Feedback />} />
-          </Route>
-        </Route>
+
 
         <Route element={<Main />}>
           <Route path="/" element={<Map />} />
@@ -49,18 +43,10 @@ function App() {
         </Route>
 
         {/* Private Routes */}
-        <Route element={<PrivateRoutes />}>
-          <Route path="/users" element={<UserList />} />
-          <Route path="/test" element={<Dashboard />} />
-        </Route>
+
 
         {/* Role-Based Routes */}
-        <Route element={<RoleBasedRoute />}>
-          <Route element={<Menu />}>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/qluser" element={<ManageUser />} />
-          </Route>
-        </Route>
+
       </Route>
     </Routes>
   );

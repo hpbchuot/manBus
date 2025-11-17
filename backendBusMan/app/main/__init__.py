@@ -17,6 +17,19 @@ def create_app(config_name):
     flask_bcrypt.init_app(app)
 
     # Thêm CORS vào ứng dụng
-    CORS(app)
+    CORS(
+        app,
+        resources={r"/*": {
+            "origins": ["http://localhost:3000"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization","Accept"],
+            # only set this to True if you actually use cookies/withCredentials
+
+        }},
+    supports_credentials=False
+
+
+    )
+
 
     return app

@@ -10,7 +10,7 @@ export default function requestApi(
   const headers = {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+
   };
 
   const instance = axios.create({ headers });
