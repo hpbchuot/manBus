@@ -1,0 +1,1 @@
+# Security configurations (JWT secret, etc.)

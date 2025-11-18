@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from app.config.database import Database
 from app.middleware.cors import init_cors
-from app.controller.auth_controller import auth_api
+from app.controllers.auth_controller import auth_api
 import logging
 
 # Configure logging
