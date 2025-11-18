@@ -1,12 +1,8 @@
-from app.main.model.user import User
-from ..service.blacklist_service import save_token
-
+from ..model.user import User
 
 class Auth:
-
-    @staticmethod
     def login_user(data):
-        print('data',data)
+        
         try:
             # fetch the user data
             user = User.query.filter_by(email=data.email).first()
@@ -70,6 +66,7 @@ class Auth:
                 'message': 'Try again'
             }
             return response_object, 500
+    
     @staticmethod
     def logout_user(data):
         if data:

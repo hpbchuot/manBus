@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from app.config.database import Database
 from app.middleware.cors import init_cors
+from app.controller.auth_controller import auth_api
 import logging
 
 # Configure logging
@@ -19,6 +20,8 @@ init_cors(app)
 # Initialize database connection pool
 try:
     db = Database()
+    # Store db instance in app config for access in blueprints
+    app.config['db'] = db
     logger.info("Database initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize database: {e}")
@@ -53,6 +56,8 @@ def cleanup(exception=None):
     """Cleanup database connections on application shutdown"""
     if exception:
         logger.error(f"Application error: {exception}")
+
+app.register_blueprint(auth_api, url_prefix='/auth')
 
 if __name__ == '__main__':
     try:

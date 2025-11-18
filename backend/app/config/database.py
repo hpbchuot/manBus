@@ -1,4 +1,5 @@
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
@@ -32,8 +33,6 @@ class Database:
         self.DB_NAME = os.getenv('DB_NAME', 'TransitDB')
         self.DB_USER = os.getenv('DB_USER', 'postgres')
         self.DB_PASSWORD = os.getenv('DB_PASSWORD')
-        self.MIN_CONN = int(os.getenv('DB_MIN_CONN', '2'))
-        self.MAX_CONN = int(os.getenv('DB_MAX_CONN', '10'))
 
         self._initialize_pool()
 
@@ -42,9 +41,9 @@ class Database:
         retries = 5
         while retries > 0:
             try:
-                self._pool = psycopg2.pool.ThreadedConnectionPool(
-                    self.MIN_CONN,
-                    self.MAX_CONN,
+                self._pool = pool.SimpleConnectionPool(
+                    minconn=1,
+                    maxconn=20,
                     host=self.DB_HOST,
                     port=self.DB_PORT,
                     database=self.DB_NAME,
@@ -52,7 +51,7 @@ class Database:
                     password=self.DB_PASSWORD,
                     cursor_factory=RealDictCursor
                 )
-                logger.info(f"Database connection pool established (min={self.MIN_CONN}, max={self.MAX_CONN})")
+                logger.info(f"Database connection pool established")
                 return
             except psycopg2.OperationalError as e:
                 logger.error(f"Database connection pool initialization failed: {e}")
