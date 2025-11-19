@@ -1,8 +1,3 @@
-import datetime
-import jwt
-# from app.main.model.blacklist import BlacklistToken
-from ..config import key
-
 class User:
     def __init__(self, user_data):
         """
