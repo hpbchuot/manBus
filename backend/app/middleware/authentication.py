@@ -1,15 +1,25 @@
 from functools import wraps
-from flask import request, jsonify
-import jwt
-from ..config import key
+from flask import jsonify, current_app
+from .token_extractor import TokenExtractor
+from .token_validator import TokenValidator
+from ..config import JWT_SECRET_KEY
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Initialize token validator with secret key
+_token_validator = TokenValidator(JWT_SECRET_KEY)
+
 
 def token_required(f):
     """
     Decorator for routes that require authentication.
     Validates JWT token and injects user data into the request.
+
+    This decorator now follows SRP by delegating to specialized classes:
+    - TokenExtractor: Extract token from request
+    - TokenValidator: Validate JWT structure
+    - Database services: Check blacklist and retrieve user
 
     Usage:
         @app.route('/protected')
@@ -19,78 +29,72 @@ def token_required(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
+        # Step 1: Extract token (delegated to TokenExtractor)
+        token, error, status = TokenExtractor.extract_from_request()
+        if error:
+            return jsonify(error), status
 
-        # Check for token in Authorization header
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            try:
-                # Expected format: "Bearer <token>"
-                token = auth_header.split(" ")[1]
-            except IndexError:
-                return jsonify({
-                    'message': 'Invalid token format. Use "Bearer <token>"',
-                    'status': 'fail'
-                }), 401
+        # Step 2: Validate token structure (delegated to TokenValidator)
+        payload, error, status = _token_validator.validate(token)
+        if error:
+            return jsonify(error), status
 
-        # Check for token in request args (query parameters)
-        if not token and 'token' in request.args:
-            token = request.args.get('token')
-
-        # No token found
-        if not token:
-            return jsonify({
-                'message': 'Authentication token is missing',
-                'status': 'fail'
-            }), 401
-
+        # Step 3: Check if token is blacklisted (using dependency container)
         try:
-            # Decode the token
-            payload = jwt.decode(token, key, algorithms=['HS256'])
+            container = current_app.config.get('container')
+            if container:
+                blacklist_service = container.get_blacklist_service()
+                if blacklist_service.is_blacklisted(token):
+                    return jsonify({
+                        'message': 'Token blacklisted. Please log in again.',
+                        'status': 'fail'
+                    }), 401
+            else:
+                # Fallback to direct database access using database function
+                db = current_app.config['db']
+                blacklist_check = db.fetch_one(
+                    "SELECT fn_is_token_blacklisted(%s) AS is_blacklisted",
+                    (token,)
+                )
+                if blacklist_check and blacklist_check['is_blacklisted']:
+                    return jsonify({
+                        'message': 'Token blacklisted. Please log in again.',
+                        'status': 'fail'
+                    }), 401
 
-            # Check if token is blacklisted (if you implement blacklist)
-            from flask import current_app
-            db = current_app.config['db']
-            blacklist_check = db.fetch_one(
-                "SELECT * FROM blacklist_token WHERE token = %s",
-                (token,)
-            )
-
-            if blacklist_check:
-                return jsonify({
-                    'message': 'Token blacklisted. Please log in again.',
-                    'status': 'fail'
-                }), 401
-
-            # Get user from database
-            current_user = db.fetch_one(
-                """SELECT id, public_id, username, email, name, phone,
-                          admin, role, registered_on, isdeleted
-                   FROM "user" WHERE public_id = %s AND isdeleted = false""",
-                (payload['uuid'],)
-            )
-
-            if not current_user:
-                return jsonify({
-                    'message': 'User not found or has been deleted',
-                    'status': 'fail'
-                }), 401
-
-            # Convert RealDictRow to regular dict for easier access
-            current_user = dict(current_user)
-
-        except jwt.ExpiredSignatureError:
-            return jsonify({
-                'message': 'Token has expired. Please log in again.',
-                'status': 'fail'
-            }), 401
-        except jwt.InvalidTokenError:
-            return jsonify({
-                'message': 'Invalid token. Please log in again.',
-                'status': 'fail'
-            }), 401
         except Exception as e:
-            logger.error(f"Authentication error: {e}")
+            logger.error(f"Blacklist check error: {e}")
+
+        # Step 4: Get user from database (using repository if available)
+        try:
+            container = current_app.config.get('container')
+            if container:
+                user_repo = container.get_user_repository()
+                current_user = user_repo.get_by_id(payload['uuid'])
+                if not current_user:
+                    return jsonify({
+                        'message': 'User not found or has been deleted',
+                        'status': 'fail'
+                    }), 401
+                current_user = dict(current_user[0]) if isinstance(current_user, list) else dict(current_user)
+            else:
+                # Fallback to direct database access
+                db = current_app.config['db']
+                current_user = db.fetch_one(
+                    """SELECT id, public_id, username, email, name, phone,
+                              admin, registered_on, is_deleted
+                       FROM Users WHERE public_id = %s AND is_deleted = false""",
+                    (payload['uuid'],)
+                )
+                if not current_user:
+                    return jsonify({
+                        'message': 'User not found or has been deleted',
+                        'status': 'fail'
+                    }), 401
+                current_user = dict(current_user)
+
+        except Exception as e:
+            logger.error(f"User retrieval error: {e}")
             return jsonify({
                 'message': 'Authentication failed',
                 'status': 'fail'
