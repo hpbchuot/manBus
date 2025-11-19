@@ -448,6 +448,42 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
+-- GET USER BY ID
+-- ============================================================================
+-- Function: fn_get_user_by_id
+-- Description: Retrieves a user by their internal ID
+-- Parameters:
+--   p_user_id: User's internal ID
+-- Returns: TABLE with user information
+-- Usage: SELECT fn_get_user_by_id(1);
+
+CREATE OR REPLACE FUNCTION fn_get_user_by_id(p_user_id INT)
+RETURNS TABLE (
+    id INT,
+    name VARCHAR(100),
+    phone VARCHAR(11),
+    email VARCHAR(255),
+    username VARCHAR(50),
+    public_id VARCHAR(100),
+    admin BOOLEAN
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        users.id,
+        users.name,
+        users.phone,
+        users.email,
+        users.username,
+        users.public_id,
+        users.admin
+    FROM users
+    WHERE users.id = p_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- ============================================================================
 -- GET USER COUNT
 -- ============================================================================
 

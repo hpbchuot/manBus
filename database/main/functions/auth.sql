@@ -13,10 +13,10 @@
 -- Description: Adds a token to the blacklist (used during logout or token revocation)
 -- Parameters:
 --   token_value: JWT token string to blacklist
--- Returns: VOID
+-- Returns: BOOLEAN - TRUE if successful (idempotent)
 -- Usage: SELECT fn_blacklist_token('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
 CREATE OR REPLACE FUNCTION fn_blacklist_token(token_value TEXT)
-RETURNS VOID AS $$
+RETURNS BOOLEAN AS $$
 BEGIN
     IF token_value IS NULL OR LENGTH(token_value) = 0 THEN
         RAISE EXCEPTION 'Token value cannot be empty';
@@ -28,6 +28,7 @@ BEGIN
     ON CONFLICT (token) DO NOTHING;
 
     RAISE NOTICE 'Token blacklisted successfully';
+    RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
 
