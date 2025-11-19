@@ -1,0 +1,1 @@
+# ICacheService interface

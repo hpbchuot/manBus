@@ -1,77 +1,36 @@
-from flask import request, jsonify, make_response
-import os
-from dotenv import load_dotenv
+"""
+CORS Middleware - Refactored to follow Single Responsibility Principle
+
+Responsibilities are now separated:
+- CORSConfigLoader: Load configuration from environment
+- CORSConfig: Hold configuration data (data structure only)
+- CORS functions: Apply CORS headers and handle requests
+"""
+from flask import request, make_response
+from .cors_config_loader import CORSConfigLoader
 import logging
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
+
 class CORSConfig:
-    """CORS configuration class"""
-    def __init__(self):
-        # Get environment
-        self.ENV = os.getenv('FLASK_ENV', 'development')
+    """CORS configuration data structure - holds configuration only"""
 
-        # Get allowed origins from environment or use defaults
-        origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
-        if origins_env:
-            self.ALLOWED_ORIGINS = [origin.strip() for origin in origins_env.split(',')]
-        else:
-            # Default origins based on environment
-            if self.ENV == 'production':
-                self.ALLOWED_ORIGINS = []  # Must be explicitly set in production
-            else:
-                self.ALLOWED_ORIGINS = [
-                    "http://localhost:3000",
-                    "http://127.0.0.1:3000",
-                    "http://localhost:5173",  # Vite default
-                    "http://127.0.0.1:5173",
-                ]
+    def __init__(self, config_dict):
+        """Initialize with configuration dictionary"""
+        self.ENV = config_dict['ENV']
+        self.ALLOWED_ORIGINS = config_dict['ALLOWED_ORIGINS']
+        self.ALLOW_ALL = config_dict['ALLOW_ALL']
+        self.ALLOWED_METHODS = config_dict['ALLOWED_METHODS']
+        self.ALLOWED_HEADERS = config_dict['ALLOWED_HEADERS']
+        self.ALLOW_CREDENTIALS = config_dict['ALLOW_CREDENTIALS']
+        self.MAX_AGE = config_dict['MAX_AGE']
+        self.EXPOSE_HEADERS = config_dict['EXPOSE_HEADERS']
 
-        # Allow all origins in development if wildcard is set
-        self.ALLOW_ALL = os.getenv('CORS_ALLOW_ALL', 'false').lower() == 'true'
 
-        # Methods
-        methods_env = os.getenv('CORS_ALLOWED_METHODS', '')
-        if methods_env:
-            self.ALLOWED_METHODS = [method.strip() for method in methods_env.split(',')]
-        else:
-            self.ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-
-        # Headers
-        headers_env = os.getenv('CORS_ALLOWED_HEADERS', '')
-        if headers_env:
-            self.ALLOWED_HEADERS = [header.strip() for header in headers_env.split(',')]
-        else:
-            self.ALLOWED_HEADERS = [
-                "Content-Type",
-                "Authorization",
-                "X-Requested-With",
-                "Accept",
-                "Origin"
-            ]
-
-        # Credentials
-        self.ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'true').lower() == 'true'
-
-        # Max age for preflight cache
-        self.MAX_AGE = int(os.getenv('CORS_MAX_AGE', '3600'))
-
-        # Expose headers
-        expose_headers_env = os.getenv('CORS_EXPOSE_HEADERS', '')
-        if expose_headers_env:
-            self.EXPOSE_HEADERS = [header.strip() for header in expose_headers_env.split(',')]
-        else:
-            self.EXPOSE_HEADERS = ["Content-Range", "X-Content-Range"]
-
-        # Log configuration
-        if self.ENV == 'production' and (self.ALLOW_ALL or not self.ALLOWED_ORIGINS):
-            logger.warning("⚠️  CORS: Running in production without specific allowed origins!")
-
-        logger.info(f"CORS initialized - ENV: {self.ENV}, Allow all: {self.ALLOW_ALL}")
-
-# Initialize CORS configuration
-cors_config = CORSConfig()
+# Initialize CORS configuration using loader
+_config_dict = CORSConfigLoader.load()
+cors_config = CORSConfig(_config_dict)
 
 def is_origin_allowed(origin):
     """

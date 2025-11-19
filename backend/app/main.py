@@ -1,8 +1,11 @@
 from flask import Flask, jsonify
 from app.config.database import Database
 from app.middleware.cors import init_cors
-from app.controller.auth_controller import auth_api
+from app.controllers.auth_controller import auth_api
+from app.core.dependencies import init_container
 import logging
+
+from app.services.factory import ServiceFactory
 
 # Configure logging
 logging.basicConfig(
@@ -20,11 +23,15 @@ init_cors(app)
 # Initialize database connection pool
 try:
     db = Database()
-    # Store db instance in app config for access in blueprints
-    app.config['db'] = db
+    factory = ServiceFactory(db)
     logger.info("Database initialized successfully")
+
+    # Initialize dependency injection container
+    container = init_container(db)
+    logger.info("Dependency container initialized successfully")
+
 except Exception as e:
-    logger.error(f"Failed to initialize database: {e}")
+    logger.error(f"Failed to initialize application: {e}")
     raise
 
 # Health check endpoint
