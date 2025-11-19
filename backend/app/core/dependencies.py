@@ -68,10 +68,3 @@ def init_container(db_executor):
     global _container
     _container = DependencyContainer(db_executor)
     return _container
-
-
-def get_container():
-    """Get the global dependency container"""
-    if _container is None:
-        raise RuntimeError("Dependency container not initialized. Call init_container() first.")
-    return _container

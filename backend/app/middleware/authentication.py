@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import jsonify, current_app
+from flask import jsonify
 from .token_extractor import TokenExtractor
 from .token_validator import TokenValidator
 from ..config import JWT_SECRET_KEY
@@ -39,62 +39,47 @@ def token_required(f):
         if error:
             return jsonify(error), status
 
-        # Step 3: Check if token is blacklisted (using dependency container)
+        # Step 3: Check if token is blacklisted (using factory)
         try:
-            container = current_app.config.get('container')
-            if container:
-                blacklist_service = container.get_blacklist_service()
-                if blacklist_service.is_blacklisted(token):
-                    return jsonify({
-                        'message': 'Token blacklisted. Please log in again.',
-                        'status': 'fail'
-                    }), 401
-            else:
-                # Fallback to direct database access using database function
-                db = current_app.config['db']
-                blacklist_check = db.fetch_one(
-                    "SELECT fn_is_token_blacklisted(%s) AS is_blacklisted",
-                    (token,)
-                )
-                if blacklist_check and blacklist_check['is_blacklisted']:
-                    return jsonify({
-                        'message': 'Token blacklisted. Please log in again.',
-                        'status': 'fail'
-                    }), 401
+            from app.main import factory
+            blacklist_service = factory.get_blacklist_service()
+            if blacklist_service.is_blacklisted(token):
+                return jsonify({
+                    'message': 'Token blacklisted. Please log in again.',
+                    'status': 'fail'
+                }), 401
 
         except Exception as e:
             logger.error(f"Blacklist check error: {e}")
+            return jsonify({
+                'message': 'Authentication failed',
+                'status': 'fail'
+            }), 500
 
-        # Step 4: Get user from database (using repository if available)
+        # Step 4: Get user from database (using factory)
         try:
-            container = current_app.config.get('container')
-            if container:
-                user_repo = container.get_user_repository()
-                current_user = user_repo.get_by_id(payload['uuid'])
-                if not current_user:
-                    return jsonify({
-                        'message': 'User not found or has been deleted',
-                        'status': 'fail'
-                    }), 401
-                current_user = dict(current_user[0]) if isinstance(current_user, list) else dict(current_user)
-            else:
-                # Fallback to direct database access
-                db = current_app.config['db']
-                current_user = db.fetch_one(
-                    """SELECT id, public_id, username, email, name, phone,
-                              admin, registered_on, is_deleted
-                       FROM Users WHERE public_id = %s AND is_deleted = false""",
-                    (payload['uuid'],)
-                )
-                if not current_user:
-                    return jsonify({
-                        'message': 'User not found or has been deleted',
-                        'status': 'fail'
-                    }), 401
+            from app.main import factory
+            user_repo = factory.get_user_repository()
+            current_user = user_repo.get_by_public_id(payload['uuid'])
+
+            if not current_user:
+                return jsonify({
+                    'message': 'User not found or has been deleted',
+                    'status': 'fail'
+                }), 401
+
+            # Convert to dict if needed
+            if hasattr(current_user, 'model_dump'):
+                current_user = current_user.model_dump()
+            elif isinstance(current_user, list) and len(current_user) > 0:
+                current_user = dict(current_user[0])
+            elif not isinstance(current_user, dict):
                 current_user = dict(current_user)
 
         except Exception as e:
             logger.error(f"User retrieval error: {e}")
+            import traceback
+            traceback.print_exc()
             return jsonify({
                 'message': 'Authentication failed',
                 'status': 'fail'

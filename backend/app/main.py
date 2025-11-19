@@ -5,6 +5,8 @@ from app.controllers.auth_controller import auth_api
 from app.core.dependencies import init_container
 import logging
 
+from app.services.factory import ServiceFactory
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -21,13 +23,11 @@ init_cors(app)
 # Initialize database connection pool
 try:
     db = Database()
-    # Store db instance in app config for backward compatibility
-    app.config['db'] = db
+    factory = ServiceFactory(db)
     logger.info("Database initialized successfully")
 
     # Initialize dependency injection container
     container = init_container(db)
-    app.config['container'] = container
     logger.info("Dependency container initialized successfully")
 
 except Exception as e:

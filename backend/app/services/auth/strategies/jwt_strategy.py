@@ -24,8 +24,8 @@ class JWTAuthenticationStrategy(IAuthenticationStrategy):
         payload = {
             'uuid': credentials['uuid'],
             'username': credentials.get('username', ''),
-            'exp': datetime.utcnow() + timedelta(hours=self._token_expiry_hours),
-            'iat': datetime.utcnow()
+            'exp': datetime.now() + timedelta(hours=self._token_expiry_hours),
+            'iat': datetime.now()
         }
 
         token = jwt.encode(payload, self._secret_key, algorithm=self._algorithm)

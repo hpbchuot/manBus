@@ -1,7 +1,5 @@
-from flask import request, Blueprint, jsonify
-from app.core.dependencies import get_container
-
-auth_api = Blueprint('auth_api', __name__)
+from flask import request, jsonify
+from . import auth_api
 
 @auth_api.route('/register', methods=['POST'])
 def register_user():
@@ -10,30 +8,34 @@ def register_user():
         # Get request data
         data = request.get_json()
 
-        # Get auth service from dependency container
-        container = get_container()
-        auth_service = container.get_auth_service()
+        # Get auth service from factory (import lazily to avoid circular import)
+        from app.main import factory
+        auth_service = factory.get_auth_service()
 
         # Register user
-        user = auth_service.register(data)
+        user_dict, token = auth_service.register(data)
+        response = jsonify({
+            'status': 'success',
+            'message': 'User registered successfully',
+            'data': user_dict
+        })
 
-        if user:
-            return jsonify({
-                'status': 'success',
-                'message': 'User registered successfully',
-                'data': user.toJson() if hasattr(user, 'toJson') else user.__dict__
-            }), 201
-        else:
-            return jsonify({
-                'status': 'fail',
-                'message': 'User registration failed'
-            }), 400
+        # Set token in HTTP-only cookie
+        response.set_cookie(
+            'access_token',
+            token,
+            httponly=True,      # Cannot be accessed by JavaScript (XSS protection)
+            secure=False,       # Set to True in production with HTTPS
+            samesite='Lax',     # CSRF protection
+            max_age=3600        # 1 hour (same as token expiration)
+        )
 
+        return response, 201
     except Exception as e:
         return jsonify({
-            'status': 'fail',
-            'message': str(e)
-        }), 400
+            'status': 'error',
+            'message': f'Registration failed: {str(e)}'
+        }), 500
 
 
 @auth_api.route('/login', methods=['POST'])
@@ -43,28 +45,30 @@ def login_user():
         # Get request data
         data = request.get_json()
 
-        # Get auth service from dependency container
-        container = get_container()
-        auth_service = container.get_auth_service()
+        # Get auth service from factory (import lazily to avoid circular import)
+        from app.main import factory
+        auth_service = factory.get_auth_service()
 
         # Login user
-        result = auth_service.login(data)
+        user_dict, token = auth_service.login(data)
 
-        return jsonify({
+        response = jsonify({
             'status': 'success',
             'message': 'Login successful',
-            'data': {
-                'token': result['token'],
-                'expires_in': result['expires_in'],
-                'user': result['user'].toJson() if hasattr(result['user'], 'toJson') else result['user'].__dict__
-            }
-        }), 200
+            'data': user_dict
+        })
 
-    except ValueError as e:
-        return jsonify({
-            'status': 'fail',
-            'message': str(e)
-        }), 401
+        # Set token in HTTP-only cookie
+        response.set_cookie(
+            'access_token',
+            token,
+            httponly=True,      # Cannot be accessed by JavaScript (XSS protection)
+            secure=False,       # Set to True in production with HTTPS
+            samesite='Lax',     # CSRF protection
+            max_age=3600        # 1 hour (same as token expiration)
+        )
+
+        return response, 200
     except Exception as e:
         # Log the actual error for debugging
         import traceback
@@ -79,53 +83,49 @@ def login_user():
 def logout_user():
     """Logout user by blacklisting token"""
     try:
-        # Get token from Authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
+        # Get token from cookie
+        token = request.cookies.get('access_token')
+
+        if not token:
             return jsonify({
                 'status': 'fail',
-                'message': 'Authorization header missing'
+                'message': 'No authentication token found'
             }), 401
 
-        # Extract token
-        token = auth_header.split(" ")[1] if " " in auth_header else auth_header
-
-        # Get auth service from dependency container
-        container = get_container()
-        auth_service = container.get_auth_service()
+        # Get auth service from factory (import lazily to avoid circular import)
+        from app.main import factory
+        auth_service = factory.get_auth_service()
 
         # Logout user
         result = auth_service.logout(token)
 
-        return jsonify({
-            'status': 'success',
-            'message': result['message']
-        }), 200
+        if result:
+            response = jsonify({
+                'status': 'success',
+                'message': 'Logout successful'
+            })
+
+            # Clear the cookie
+            response.set_cookie(
+                'access_token',
+                '',
+                httponly=True,
+                secure=False,
+                samesite='Lax',
+                max_age=0  # Expire immediately
+            )
+
+            return response, 200
+        else:
+            return jsonify({
+                'status': 'fail',
+                'message': 'Logout failed'
+            }), 400
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            'status': 'fail',
-            'message': str(e)
+            'status': 'error',
+            'message': f'Logout failed: {str(e)}'
         }), 500
-
-# @auth_api.route('/refresh-token', methods=['POST'])
-# @api.validate(
-#     body=Request(RefreshTokenDTO),  # Validate the request body using the Pydantic model
-#     resp=Response(HTTP_200=Message, HTTP_400=Message),  # Example response
-#     tags=['auth']
-# )
-# def refresh_token():
-#     data = request.context.body
-#     return Auth.get_refresh_token(data=data)
-#
-#
-# @api.route('/logout')
-# class LogoutAPI(Resource):
-#     """
-#     Logout Resource
-#     """
-#     @api.doc('logout a user')
-#     def post(self):
-#         # get auth token
-#         auth_header = request.headers.get('Authorization')
-#         return Auth.logout_user(data=auth_header)

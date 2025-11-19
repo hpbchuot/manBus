@@ -8,7 +8,12 @@ class TokenExtractor:
     @staticmethod
     def extract_from_request():
         """
-        Extract token from request (Authorization header or query params)
+        Extract token from request (Cookie, Authorization header, or query params)
+
+        Priority order:
+        1. HTTP-only cookie (most secure)
+        2. Authorization header (for API clients)
+        3. Query parameters (least secure, for special cases)
 
         Returns:
             str: The extracted token
@@ -16,8 +21,12 @@ class TokenExtractor:
         """
         token = None
 
-        # Check for token in Authorization header
-        if 'Authorization' in request.headers:
+        # 1. Check for token in HTTP-only cookie (highest priority)
+        if 'access_token' in request.cookies:
+            token = request.cookies.get('access_token')
+
+        # 2. Check for token in Authorization header (for API clients without cookies)
+        if not token and 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
             try:
                 # Expected format: "Bearer <token>"
@@ -28,7 +37,7 @@ class TokenExtractor:
                     'status': 'fail'
                 }, 401
 
-        # Check for token in request args (query parameters) as fallback
+        # 3. Check for token in request args (query parameters) as fallback
         if not token and 'token' in request.args:
             token = request.args.get('token')
 

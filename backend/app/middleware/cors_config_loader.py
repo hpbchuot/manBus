@@ -54,7 +54,7 @@ class CORSConfigLoader:
 
         expose_headers_env = os.getenv('CORS_EXPOSE_HEADERS', '')
         expose_headers = [header.strip() for header in expose_headers_env.split(',')] if expose_headers_env else [
-            "Content-Range", "X-Content-Range"
+            "Content-Range", "X-Content-Range", "Authorization"
         ]
 
         # Validate and warn

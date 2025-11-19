@@ -3,7 +3,6 @@ Authentication service for user login, registration, and session management.
 Uses repository pattern: Repository → Service → Schema → Controller
 """
 import logging
-import uuid
 from typing import Optional, Dict, Any
 
 from app.repositories.user_repository import UserRepository
@@ -15,27 +14,6 @@ from app.schemas.auth_schemas import TokenResponse
 from app.core.interfaces.services.auth_service_interface import IAuthService
 
 logger = logging.getLogger(__name__)
-
-
-class AuthenticationException(Exception):
-    """Base exception for authentication errors"""
-    pass
-
-
-class InvalidCredentialsException(AuthenticationException):
-    """Invalid username/password"""
-    pass
-
-
-class UserAlreadyExistsException(AuthenticationException):
-    """User already exists"""
-    pass
-
-
-class UserNotFoundException(AuthenticationException):
-    """User not found"""
-    pass
-
 
 class AuthService(IAuthService):
     """
@@ -96,7 +74,7 @@ class AuthService(IAuthService):
 
             # Check if user already exists using repository
             if self.user_repo.user_exists(email, username):
-                raise UserAlreadyExistsException("User with this email or username already exists")
+                raise Exception("User with this email or username already exists")
 
             # Prepare entity for repository
             entity = {
@@ -122,32 +100,10 @@ class AuthService(IAuthService):
                 admin=user_dict['admin']
             )
 
-            logger.info(f"User registered successfully: {username}")
-
             # Return appropriate format based on input type
-            if isinstance(user_data, dict):
-                # Backward compatible dict response
-                from app.schemas.user_schemas import User
-                user_data_clean = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                return {
-                    'token': token,
-                    'expires_in': 3600,
-                    'user': User(user_data_clean)
-                }
-            else:
-                # Schema response
-                user_data_clean = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                user_response = UserResponse(**user_data_clean)
-                return UserLoginResponse(
-                    access_token=token,
-                    token_type="bearer",
-                    user=user_response
-                )
-
-        except UserAlreadyExistsException:
-            raise
+            return user_dict, token
         except Exception as e:
-            logger.error(f"Error registering user: {e}")
+            logger.error(f"Error during registration: {e}")
             raise
 
     def login(self, credentials: UserLogin | dict) -> UserLoginResponse | dict:
@@ -166,26 +122,18 @@ class AuthService(IAuthService):
         try:
             # Handle both schema and dict input
             if isinstance(credentials, dict):
-                username_or_email = credentials.get('username') or credentials.get('email')
+                email = credentials.get('email')
                 password = credentials.get('password')
             else:
-                username_or_email = credentials.username
+                email = credentials.email
                 password = credentials.password
 
-            # Get user by username or email using repository
-            user_dict = self.user_repo.get_by_username_or_email(username_or_email)
-
-            if not user_dict:
-                raise InvalidCredentialsException("Invalid username or password")
-
-            # Verify password
-            if not self.password_service.verify_password(password, user_dict['password_hash']):
-                raise InvalidCredentialsException("Invalid username or password")
-
-            # Check if password needs rehashing
-            if self.password_service.needs_rehash(user_dict['password_hash']):
-                new_hash = self.password_service.hash_password(password)
-                self.user_repo.change_password(user_dict['id'], new_hash)
+            # Verify user password using repository function
+            userId = self.auth_repo.verify_user_password(email, password)
+            if not userId:
+                raise Exception("Invalid email or password")
+            
+            user_dict = self.user_repo.get_by_id(userId)
 
             # Generate token
             token = self.token_service.generate_token(
@@ -195,30 +143,7 @@ class AuthService(IAuthService):
                 admin=user_dict['admin']
             )
 
-            logger.info(f"User logged in successfully: {user_dict['username']}")
-
-            # Return appropriate format
-            if isinstance(credentials, dict):
-                # Backward compatible response
-                from app.schemas.user_schemas import User
-                user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                return {
-                    'token': token,
-                    'expires_in': 3600,
-                    'user': User(user_data)
-                }
-            else:
-                # Schema response
-                user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                user_response = UserResponse(**user_data)
-                return UserLoginResponse(
-                    access_token=token,
-                    token_type="bearer",
-                    user=user_response
-                )
-
-        except (InvalidCredentialsException, UserNotFoundException):
-            raise
+            return user_dict, token
         except Exception as e:
             logger.error(f"Error during login: {e}")
             raise
@@ -310,18 +235,18 @@ class AuthService(IAuthService):
 
         Raises:
             InvalidCredentialsException: If current password is wrong
-            UserNotFoundException: If user not found
+            Exception: If user not found
         """
         try:
             # Fetch user with password hash from repository
             user_dict = self.user_repo.get_by_id(user_id)
 
             if not user_dict:
-                raise UserNotFoundException("User not found")
+                raise Exception("User not found")
 
             # Verify current password
             if not self.password_service.verify_password(current_password, user_dict['password_hash']):
-                raise InvalidCredentialsException("Current password is incorrect")
+                raise Exception("Current password is incorrect")
 
             # Hash new password
             new_hash = self.password_service.hash_password(new_password)
@@ -333,9 +258,6 @@ class AuthService(IAuthService):
                 logger.info(f"Password changed for user ID: {user_id}")
 
             return success
-
-        except (InvalidCredentialsException, UserNotFoundException):
-            raise
         except Exception as e:
             logger.error(f"Error changing password: {e}")
             raise
