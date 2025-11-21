@@ -1,6 +1,14 @@
 """
 User service for managing user operations with repository pattern.
 Uses: Repository → Service → Schema → Controller
+
+Architecture (SRP Compliance):
+- UserCrudService: Core CRUD operations (create, get, update, delete)
+- UserSearchService: Search and filtering operations
+- UserLookupService: User lookup by email, username, public_id
+- UserRoleService: Role management operations
+- UserPasswordService: Password management operations
+- UserService: Facade/Composite that delegates to all specialized services
 """
 import logging
 import uuid
@@ -22,20 +30,14 @@ from app.schemas.base_schema import PaginationParams, PaginatedResponse
 logger = logging.getLogger(__name__)
 
 
-class UserService:
+class UserCrudService:
     """
-    User service handling all user-related operations.
-    Uses UserRepository for data access, returns Pydantic schemas.
+    User CRUD service - handles core Create, Read, Update, Delete operations.
+    Single Responsibility: Basic user lifecycle management.
     """
 
     def __init__(self, user_repository: UserRepository, password_service: PasswordService):
-        """
-        Initialize user service.
-
-        Args:
-            user_repository: User repository for data access
-            password_service: Password hashing service
-        """
+        """Initialize with dependencies."""
         self.user_repo = user_repository
         self.password_service = password_service
 
@@ -236,6 +238,17 @@ class UserService:
             logger.error(f"Error restoring user {user_id}: {e}")
             raise
 
+
+class UserSearchService:
+    """
+    User search service - handles searching, filtering, and listing users.
+    Single Responsibility: User search and retrieval operations.
+    """
+
+    def __init__(self, user_repository: UserRepository):
+        """Initialize with user repository."""
+        self.user_repo = user_repository
+
     def search_users(
         self,
         search_params: UserSearchParams,
@@ -300,79 +313,69 @@ class UserService:
             logger.error(f"Error searching users: {e}")
             raise
 
-    def get_user_with_roles(self, user_id: int) -> Optional[UserWithRoles]:
+    def get_all_users(
+        self,
+        include_deleted: bool = False,
+        pagination: Optional[PaginationParams] = None
+    ) -> List[UserResponse] | PaginatedResponse:
         """
-        Get user with their assigned roles.
+        Get all users.
 
         Args:
-            user_id: User ID
+            include_deleted: Include soft-deleted users
+            pagination: Optional pagination
 
         Returns:
-            UserWithRoles or None
+            List of UserResponse or PaginatedResponse
         """
         try:
-            # Get user with roles via repository
-            user_dict = self.user_repo.get_with_roles(user_id)
-            if not user_dict:
-                return None
+            if pagination:
+                # Get total count
+                total = self.user_repo.count(include_deleted=include_deleted)
 
-            # Clean password_hash
-            user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
+                # Get paginated items
+                user_dicts = self.user_repo.get_all(
+                    include_deleted=include_deleted,
+                    limit=pagination.limit,
+                    offset=pagination.offset
+                )
 
-            # Convert roles array (if None, set to empty list)
-            if user_data.get('roles') is None:
-                user_data['roles'] = []
+                # Convert to schemas
+                items = []
+                for user_dict in user_dicts:
+                    user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
+                    items.append(UserResponse(**user_data))
 
-            return UserWithRoles(**user_data)
+                return PaginatedResponse[UserResponse].create(
+                    items=items,
+                    total=total,
+                    page=pagination.page,
+                    page_size=pagination.page_size
+                )
+            else:
+                user_dicts = self.user_repo.get_all(include_deleted=include_deleted)
+
+                users = []
+                for user_dict in user_dicts:
+                    user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
+                    users.append(UserResponse(**user_data))
+
+                return users
 
         except Exception as e:
-            logger.error(f"Error getting user with roles {user_id}: {e}")
+            logger.error(f"Error getting all users: {e}")
             raise
 
-    def change_password(self, user_id: int, password_data: UserPasswordUpdate) -> bool:
-        """
-        Change user password.
 
-        Args:
-            user_id: User ID
-            password_data: Password update data
+class UserLookupService:
+    """
+    User lookup service - handles finding users by various identifiers.
+    Single Responsibility: User lookup by email, username, public_id.
+    """
 
-        Returns:
-            True if successful
-
-        Raises:
-            ValueError: If current password is incorrect
-        """
-        try:
-            # Get current user with password hash
-            user_dict = self.user_repo.get_by_id(user_id)
-
-            if not user_dict:
-                raise ValueError("User not found")
-
-            # Verify current password
-            if not self.password_service.verify_password(
-                password_data.current_password,
-                user_dict['password_hash']
-            ):
-                raise ValueError("Current password is incorrect")
-
-            # Hash new password
-            new_hash = self.password_service.hash_password(password_data.new_password)
-
-            # Update password via repository
-            success = self.user_repo.change_password(user_id, new_hash)
-
-            if success:
-                logger.info(f"Password changed for user ID: {user_id}")
-
-            return success
-
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Error changing password for user {user_id}: {e}")
-            raise
+    def __init__(self, user_repository: UserRepository):
+        """Initialize with user repository."""
+        self.user_repo = user_repository
 
     def get_by_email(self, email: str) -> Optional[UserResponse]:
         """
@@ -440,57 +443,44 @@ class UserService:
             logger.error(f"Error getting user by public_id: {e}")
             raise
 
-    def get_all_users(
-        self,
-        include_deleted: bool = False,
-        pagination: Optional[PaginationParams] = None
-    ) -> List[UserResponse] | PaginatedResponse:
+
+class UserRoleService:
+    """
+    User role service - handles role assignment and management.
+    Single Responsibility: User role operations.
+    """
+
+    def __init__(self, user_repository: UserRepository):
+        """Initialize with user repository."""
+        self.user_repo = user_repository
+
+    def get_user_with_roles(self, user_id: int) -> Optional[UserWithRoles]:
         """
-        Get all users.
+        Get user with their assigned roles.
 
         Args:
-            include_deleted: Include soft-deleted users
-            pagination: Optional pagination
+            user_id: User ID
 
         Returns:
-            List of UserResponse or PaginatedResponse
+            UserWithRoles or None
         """
         try:
-            if pagination:
-                # Get total count
-                total = self.user_repo.count(include_deleted=include_deleted)
+            # Get user with roles via repository
+            user_dict = self.user_repo.get_with_roles(user_id)
+            if not user_dict:
+                return None
 
-                # Get paginated items
-                user_dicts = self.user_repo.get_all(
-                    include_deleted=include_deleted,
-                    limit=pagination.limit,
-                    offset=pagination.offset
-                )
+            # Clean password_hash
+            user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
 
-                # Convert to schemas
-                items = []
-                for user_dict in user_dicts:
-                    user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                    items.append(UserResponse(**user_data))
+            # Convert roles array (if None, set to empty list)
+            if user_data.get('roles') is None:
+                user_data['roles'] = []
 
-                return PaginatedResponse[UserResponse].create(
-                    items=items,
-                    total=total,
-                    page=pagination.page,
-                    page_size=pagination.page_size
-                )
-            else:
-                user_dicts = self.user_repo.get_all(include_deleted=include_deleted)
-
-                users = []
-                for user_dict in user_dicts:
-                    user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                    users.append(UserResponse(**user_data))
-
-                return users
+            return UserWithRoles(**user_data)
 
         except Exception as e:
-            logger.error(f"Error getting all users: {e}")
+            logger.error(f"Error getting user with roles {user_id}: {e}")
             raise
 
     def assign_role(self, user_id: int, role_id: int) -> bool:
@@ -538,3 +528,153 @@ class UserService:
         except Exception as e:
             logger.error(f"Error removing role: {e}")
             raise
+
+
+class UserPasswordService:
+    """
+    User password service - handles password management.
+    Single Responsibility: Password change operations.
+    """
+
+    def __init__(self, user_repository: UserRepository, password_service: PasswordService):
+        """Initialize with dependencies."""
+        self.user_repo = user_repository
+        self.password_service = password_service
+
+    def change_password(self, user_id: int, password_data: UserPasswordUpdate) -> bool:
+        """
+        Change user password.
+
+        Args:
+            user_id: User ID
+            password_data: Password update data
+
+        Returns:
+            True if successful
+
+        Raises:
+            ValueError: If current password is incorrect
+        """
+        try:
+            # Get current user with password hash
+            user_dict = self.user_repo.get_by_id(user_id)
+
+            if not user_dict:
+                raise ValueError("User not found")
+
+            # Verify current password
+            if not self.password_service.verify_password(
+                password_data.current_password,
+                user_dict['password_hash']
+            ):
+                raise ValueError("Current password is incorrect")
+
+            # Hash new password
+            new_hash = self.password_service.hash_password(password_data.new_password)
+
+            # Update password via repository
+            success = self.user_repo.change_password(user_id, new_hash)
+
+            if success:
+                logger.info(f"Password changed for user ID: {user_id}")
+
+            return success
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error changing password for user {user_id}: {e}")
+            raise
+
+
+class UserService:
+    """
+    Composite User Service - Facade pattern for all user operations.
+
+    Aggregates specialized services following SRP:
+    - UserCrudService: CRUD operations
+    - UserSearchService: Search & filtering
+    - UserLookupService: User lookup
+    - UserRoleService: Role management
+    - UserPasswordService: Password management
+
+    This class delegates to specialized services while providing
+    a single, unified interface for the controller layer.
+    """
+
+    def __init__(self, user_repository: UserRepository, password_service: PasswordService):
+        """
+        Initialize composite user service.
+
+        Args:
+            user_repository: User repository for data access
+            password_service: Password hashing service
+        """
+        # Initialize specialized services
+        self._crud = UserCrudService(user_repository, password_service)
+        self._search = UserSearchService(user_repository)
+        self._lookup = UserLookupService(user_repository)
+        self._roles = UserRoleService(user_repository)
+        self._password = UserPasswordService(user_repository, password_service)
+
+        # Keep references for backward compatibility
+        self.user_repo = user_repository
+        self.password_service = password_service
+
+    # === CRUD Operations (delegate to UserCrudService) ===
+    def create_user(self, user_data: UserCreate) -> UserResponse:
+        return self._crud.create_user(user_data)
+
+    def get_user(self, user_id: int) -> Optional[UserResponse]:
+        return self._crud.get_user(user_id)
+
+    def get_user_detail(self, user_id: int) -> Optional[UserDetailResponse]:
+        return self._crud.get_user_detail(user_id)
+
+    def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[UserResponse]:
+        return self._crud.update_user(user_id, user_data)
+
+    def delete_user(self, user_id: int, hard_delete: bool = False) -> bool:
+        return self._crud.delete_user(user_id, hard_delete)
+
+    def restore_user(self, user_id: int) -> Optional[UserResponse]:
+        return self._crud.restore_user(user_id)
+
+    # === Search Operations (delegate to UserSearchService) ===
+    def search_users(
+        self,
+        search_params: UserSearchParams,
+        pagination: Optional[PaginationParams] = None
+    ) -> List[UserResponse] | PaginatedResponse:
+        return self._search.search_users(search_params, pagination)
+
+    def get_all_users(
+        self,
+        include_deleted: bool = False,
+        pagination: Optional[PaginationParams] = None
+    ) -> List[UserResponse] | PaginatedResponse:
+        return self._search.get_all_users(include_deleted, pagination)
+
+    # === Lookup Operations (delegate to UserLookupService) ===
+    def get_by_email(self, email: str) -> Optional[UserResponse]:
+        return self._lookup.get_by_email(email)
+
+    def get_by_username(self, username: str) -> Optional[UserResponse]:
+        return self._lookup.get_by_username(username)
+
+    def get_by_public_id(self, public_id: str) -> Optional[UserResponse]:
+        return self._lookup.get_by_public_id(public_id)
+
+    # === Role Operations (delegate to UserRoleService) ===
+    def get_user_with_roles(self, user_id: int) -> Optional[UserWithRoles]:
+        return self._roles.get_user_with_roles(user_id)
+
+    def assign_role(self, user_id: int, role_id: int) -> bool:
+        return self._roles.assign_role(user_id, role_id)
+
+    def remove_role(self, user_id: int, role_id: int) -> bool:
+        return self._roles.remove_role(user_id, role_id)
+
+    # === Password Operations (delegate to UserPasswordService) ===
+    def change_password(self, user_id: int, password_data: UserPasswordUpdate) -> bool:
+        return self._password.change_password(user_id, password_data)

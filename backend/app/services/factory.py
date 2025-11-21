@@ -12,17 +12,28 @@ Usage:
     # Get services
     auth_service = factory.get_auth_service()
     user_service = factory.get_user_service()
+    bus_service = factory.get_bus_service()
+
+Follows SOLID principles:
+- SRP: Single responsibility - service creation and management
+- OCP: Open/Closed - extensible via service registration
+- DIP: Depends on abstractions (interfaces)
 """
 import logging
-from typing import Optional
+from typing import Optional, Dict, Callable, Any
 
 from app.config.database import Database
 from app.repositories.user_repository import UserRepository
 from app.repositories.auth_repository import AuthRepository
+from app.repositories.bus_repository import BusRepository
+from app.repositories.driver_repository import DriverRepository
+from app.repositories.route_repository import RouteRepository
+from app.repositories.feedback_repository import FeedbackRepository
 from app.services.auth.password_service import PasswordService
 from app.services.auth.token_service import TokenService
 from app.services.auth.auth_service import AuthService
 from app.services.user.user_service import UserService
+from app.services.bus.bus_service import BusService
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +42,11 @@ class ServiceFactory:
     """
     Service factory for creating and managing service instances.
 
-    Implements lazy-loading singleton pattern:
+    Implements lazy-loading singleton pattern with service registration (OCP):
     - Services are created only when first requested
     - Same instance is returned on subsequent requests
     - Ensures proper dependency injection
+    - Extensible via service registration pattern
     """
 
     def __init__(self, db: Database):
@@ -46,134 +58,137 @@ class ServiceFactory:
         """
         self.db = db
 
-        # Lazy-loaded repository instances
-        self._user_repository: Optional[UserRepository] = None
-        self._auth_repository: Optional[AuthRepository] = None
+        # Cache for instantiated repositories and services
+        self._repositories: Dict[str, Any] = {}
+        self._services: Dict[str, Any] = {}
+        self._service_creators: Dict[str, Callable] = {}
 
-        # Lazy-loaded service instances
-        self._password_service: Optional[PasswordService] = None
-        self._token_service: Optional[TokenService] = None
-        self._auth_service: Optional[AuthService] = None
-        self._user_service: Optional[UserService] = None
+        # Register service creators (OCP - single place to add new services)
+        self._register_service_creators()
 
         logger.info("ServiceFactory initialized")
 
-    # Repository getters
+    def _register_service_creators(self):
+        """
+        Register how to create each service.
+        New services added here - follows Open/Closed Principle.
+        """
+        # Repository creators
+        self._service_creators['user_repository'] = lambda: UserRepository(self.db)
+        self._service_creators['auth_repository'] = lambda: AuthRepository(self.db)
+        self._service_creators['bus_repository'] = lambda: BusRepository(self.db)
+        self._service_creators['driver_repository'] = lambda: DriverRepository(self.db)
+        self._service_creators['route_repository'] = lambda: RouteRepository(self.db)
+        self._service_creators['feedback_repository'] = lambda: FeedbackRepository(self.db)
+
+        # Service creators
+        self._service_creators['password_service'] = lambda: PasswordService()
+        self._service_creators['token_service'] = lambda: TokenService(
+            auth_repository=self.get('auth_repository')
+        )
+        self._service_creators['auth_service'] = lambda: AuthService(
+            user_repository=self.get('user_repository'),
+            auth_repository=self.get('auth_repository'),
+            password_service=self.get('password_service'),
+            token_service=self.get('token_service')
+        )
+        self._service_creators['user_service'] = lambda: UserService(
+            user_repository=self.get('user_repository'),
+            password_service=self.get('password_service')
+        )
+        self._service_creators['bus_service'] = lambda: BusService(
+            bus_repository=self.get('bus_repository')
+        )
+
+    def get(self, service_name: str) -> Any:
+        """
+        Get or create service/repository by name.
+        Lazy initialization with singleton pattern.
+
+        Args:
+            service_name: Name of the service to retrieve
+
+        Returns:
+            Service or repository instance
+
+        Raises:
+            ValueError: If service name is unknown
+        """
+        # Check if already created
+        if service_name in self._repositories:
+            return self._repositories[service_name]
+        if service_name in self._services:
+            return self._services[service_name]
+
+        # Create if creator exists
+        if service_name in self._service_creators:
+            instance = self._service_creators[service_name]()
+
+            # Store in appropriate cache
+            if 'repository' in service_name:
+                self._repositories[service_name] = instance
+                logger.debug(f"{service_name} created")
+            else:
+                self._services[service_name] = instance
+                logger.debug(f"{service_name} created")
+
+            return instance
+
+        raise ValueError(f"Unknown service: {service_name}")
+
+    # Convenience getter methods (backward compatibility)
 
     def get_user_repository(self) -> UserRepository:
-        """
-        Get or create UserRepository instance.
-
-        Returns:
-            UserRepository singleton
-        """
-        if self._user_repository is None:
-            self._user_repository = UserRepository(self.db)
-            logger.debug("UserRepository created")
-        return self._user_repository
+        """Get or create UserRepository instance"""
+        return self.get('user_repository')
 
     def get_auth_repository(self) -> AuthRepository:
-        """
-        Get or create AuthRepository instance.
+        """Get or create AuthRepository instance"""
+        return self.get('auth_repository')
 
-        Returns:
-            AuthRepository singleton
-        """
-        if self._auth_repository is None:
-            self._auth_repository = AuthRepository(self.db)
-            logger.debug("AuthRepository created")
-        return self._auth_repository
+    def get_bus_repository(self) -> BusRepository:
+        """Get or create BusRepository instance"""
+        return self.get('bus_repository')
 
-    # Service getters
+    def get_driver_repository(self) -> DriverRepository:
+        """Get or create DriverRepository instance"""
+        return self.get('driver_repository')
+
+    def get_route_repository(self) -> RouteRepository:
+        """Get or create RouteRepository instance"""
+        return self.get('route_repository')
+
+    def get_feedback_repository(self) -> FeedbackRepository:
+        """Get or create FeedbackRepository instance"""
+        return self.get('feedback_repository')
 
     def get_password_service(self) -> PasswordService:
-        """
-        Get or create PasswordService instance.
-
-        Returns:
-            PasswordService singleton (no dependencies)
-        """
-        if self._password_service is None:
-            self._password_service = PasswordService()
-            logger.debug("PasswordService created")
-        return self._password_service
+        """Get or create PasswordService instance"""
+        return self.get('password_service')
 
     def get_token_service(self) -> TokenService:
-        """
-        Get or create TokenService instance.
-
-        Dependencies: AuthRepository
-
-        Returns:
-            TokenService singleton
-        """
-        if self._token_service is None:
-            auth_repo = self.get_auth_repository()
-            self._token_service = TokenService(auth_repo)
-            logger.debug("TokenService created")
-        return self._token_service
+        """Get or create TokenService instance"""
+        return self.get('token_service')
 
     def get_auth_service(self) -> AuthService:
-        """
-        Get or create AuthService instance.
-
-        Dependencies:
-            - UserRepository
-            - AuthRepository
-            - PasswordService
-            - TokenService
-
-        Returns:
-            AuthService singleton
-        """
-        if self._auth_service is None:
-            user_repo = self.get_user_repository()
-            auth_repo = self.get_auth_repository()
-            password_service = self.get_password_service()
-            token_service = self.get_token_service()
-
-            self._auth_service = AuthService(
-                user_repository=user_repo,
-                auth_repository=auth_repo,
-                password_service=password_service,
-                token_service=token_service
-            )
-            logger.debug("AuthService created")
-        return self._auth_service
+        """Get or create AuthService instance"""
+        return self.get('auth_service')
 
     def get_user_service(self) -> UserService:
-        """
-        Get or create UserService instance.
+        """Get or create UserService instance"""
+        return self.get('user_service')
 
-        Dependencies:
-            - UserRepository
-            - PasswordService
-
-        Returns:
-            UserService singleton
-        """
-        if self._user_service is None:
-            user_repo = self.get_user_repository()
-            password_service = self.get_password_service()
-
-            self._user_service = UserService(
-                user_repository=user_repo,
-                password_service=password_service
-            )
-            logger.debug("UserService created")
-        return self._user_service
+    def get_bus_service(self) -> BusService:
+        """Get or create BusService instance"""
+        return self.get('bus_service')
 
     def reset(self):
         """
         Reset all cached instances.
         Useful for testing or when database connection needs refresh.
         """
-        self._user_repository = None
-        self._auth_repository = None
-        self._password_service = None
-        self._token_service = None
-        self._auth_service = None
-        self._user_service = None
+        self._repositories.clear()
+        self._services.clear()
         logger.info("ServiceFactory reset - all instances cleared")
 
 

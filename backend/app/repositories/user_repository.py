@@ -1,15 +1,24 @@
 """
 User Repository - Data access layer for user operations
 Calls PostgreSQL functions and returns RealDictRow results
+
+Architecture (SRP Compliance):
+- UserCoreRepository: Core CRUD operations (inherits from BaseRepository)
+- UserLookupRepository: User lookup operations (email, username, public_id)
+- UserSearchRepository: Search and filtering operations
+- UserRoleRepository: Role management operations
+- UserPasswordRepository: Password management operations
+- UserRepository: Facade/Composite that delegates to all specialized repositories
 """
 from typing import Optional, List, Dict, Any
 from .base_repository import BaseRepository
 
 
-class UserRepository(BaseRepository):
+class UserCoreRepository(BaseRepository):
     """
-    User repository - handles all user data access via PostgreSQL functions.
-    Returns RealDictRow objects (dict-like) from database.
+    Core user repository - handles basic CRUD operations.
+    Inherits from BaseRepository to satisfy abstract method requirements.
+    Single Responsibility: Create, Read, Update, Delete users.
     """
 
     def _get_table_name(self):
@@ -79,6 +88,60 @@ class UserRepository(BaseRepository):
         result = self._db.fetch_one(query, (user_id,))
         return result
 
+    def delete(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Soft delete user using fn_soft_delete_user function.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            RealDictRow with deleted user data or None
+        """
+        query = 'SELECT * FROM fn_soft_delete_user(%s)'
+        result = self._db.fetch_one(query, (user_id,))
+        return dict(result) if result else None
+
+    def restore(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Restore soft-deleted user using fn_restore_user function.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            RealDictRow with restored user data or None
+        """
+        query = 'SELECT * FROM fn_restore_user(%s)'
+        result = self._db.fetch_one(query, (user_id,))
+        return dict(result) if result else None
+
+    def user_exists(self, email: str, username: str) -> bool:
+        """
+        Check if user exists by email or username.
+
+        Args:
+            email: Email to check
+            username: Username to check
+
+        Returns:
+            True if user exists, False otherwise
+        """
+        query = 'SELECT * FROM users where email = %s OR username = %s'
+        result = self._db.fetch_one(query, (email, username))
+        return True if result else False
+
+
+class UserLookupRepository:
+    """
+    User lookup repository - handles finding users by various identifiers.
+    Single Responsibility: User lookup by email, username, public_id.
+    """
+
+    def __init__(self, db_executor):
+        """Initialize with database executor."""
+        self._db = db_executor
+
     def get_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """
         Get user by email using fn_get_user_by_email function.
@@ -135,33 +198,16 @@ class UserRepository(BaseRepository):
         result = self._db.fetch_one(query, (identifier,))
         return dict(result) if result else None
 
-    def soft_delete(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Soft delete user using fn_soft_delete_user function.
 
-        Args:
-            user_id: User ID
+class UserSearchRepository:
+    """
+    User search repository - handles searching, filtering, and counting users.
+    Single Responsibility: User search and filtering operations.
+    """
 
-        Returns:
-            RealDictRow with deleted user data or None
-        """
-        query = 'SELECT * FROM fn_soft_delete_user(%s)'
-        result = self._db.fetch_one(query, (user_id,))
-        return dict(result) if result else None
-
-    def restore(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Restore soft-deleted user using fn_restore_user function.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            RealDictRow with restored user data or None
-        """
-        query = 'SELECT * FROM fn_restore_user(%s)'
-        result = self._db.fetch_one(query, (user_id,))
-        return dict(result) if result else None
+    def __init__(self, db_executor):
+        """Initialize with database executor."""
+        self._db = db_executor
 
     def search(
         self,
@@ -230,6 +276,17 @@ class UserRepository(BaseRepository):
         result = self._db.fetch_one(sql, (query, admin_only, include_deleted))
         return result['count'] if result else 0
 
+
+class UserRoleRepository:
+    """
+    User role repository - handles role assignment and management.
+    Single Responsibility: User role operations.
+    """
+
+    def __init__(self, db_executor):
+        """Initialize with database executor."""
+        self._db = db_executor
+
     def get_with_roles(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
         Get user with roles using fn_get_user_with_roles function.
@@ -243,36 +300,6 @@ class UserRepository(BaseRepository):
         query = 'SELECT * FROM fn_get_user_with_roles(%s)'
         result = self._db.fetch_one(query, (user_id,))
         return dict(result) if result else None
-
-    def user_exists(self, email: str, username: str) -> bool:
-        """
-        Check if user exists by email or username using fn_user_exists function.
-
-        Args:
-            email: Email to check
-            username: Username to check
-
-        Returns:
-            True if user exists, False otherwise
-        """
-        query = 'SELECT * FROM users where email = %s OR username = %s'
-        result = self._db.fetch_one(query, (email, username))
-        return True if result else False
-
-    def change_password(self, user_id: int, new_password_hash: str) -> bool:
-        """
-        Change user password using fn_change_user_password function.
-
-        Args:
-            user_id: User ID
-            new_password_hash: New bcrypt password hash
-
-        Returns:
-            True if successful, False otherwise
-        """
-        query = 'SELECT fn_change_user_password(%s, %s) AS success'
-        result = self._db.fetch_one(query, (user_id, new_password_hash))
-        return result['success'] if result else False
 
     def assign_role(self, user_id: int, role_id: int) -> bool:
         """
@@ -332,3 +359,150 @@ class UserRepository(BaseRepository):
         query = 'SELECT fn_get_user_roles(%s) AS roles'
         result = self._db.fetch_one(query, (user_id,))
         return result['roles'] if result and result['roles'] else []
+
+
+class UserPasswordRepository:
+    """
+    User password repository - handles password management.
+    Single Responsibility: Password operations.
+    """
+
+    def __init__(self, db_executor):
+        """Initialize with database executor."""
+        self._db = db_executor
+
+    def change_password(self, user_id: int, new_password_hash: str) -> bool:
+        """
+        Change user password using fn_change_user_password function.
+
+        Args:
+            user_id: User ID
+            new_password_hash: New bcrypt password hash
+
+        Returns:
+            True if successful, False otherwise
+        """
+        query = 'SELECT fn_change_user_password(%s, %s) AS success'
+        result = self._db.fetch_one(query, (user_id, new_password_hash))
+        return result['success'] if result else False
+
+
+class UserRepository:
+    """
+    Composite User Repository - Facade pattern for all user operations.
+
+    Aggregates specialized repositories following SRP:
+    - UserCoreRepository: CRUD operations
+    - UserLookupRepository: User lookup
+    - UserSearchRepository: Search & filtering
+    - UserRoleRepository: Role management
+    - UserPasswordRepository: Password management
+
+    This class delegates to specialized repositories while providing
+    a single, unified interface for the service layer.
+    """
+
+    def __init__(self, db_executor):
+        """
+        Initialize composite user repository.
+
+        Args:
+            db_executor: Database executor instance
+        """
+        # Specialized repositories
+        self._core = UserCoreRepository(db_executor)
+        self._lookup = UserLookupRepository(db_executor)
+        self._search = UserSearchRepository(db_executor)
+        self._roles = UserRoleRepository(db_executor)
+        self._password = UserPasswordRepository(db_executor)
+
+        # Keep db_executor for backward compatibility
+        self._db = db_executor
+
+    # === Core Operations (delegate to UserCoreRepository) ===
+    def _get_table_name(self):
+        return self._core._get_table_name()
+
+    def _get_id_column(self):
+        return self._core._get_id_column()
+
+    def create(self, entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        return self._core.create(entity)
+
+    def update(self, user_id: int, entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        return self._core.update(user_id, entity)
+
+    def get_by_id(self, user_id: int):
+        return self._core.get_by_id(user_id)
+
+    def soft_delete(self, user_id: int) -> Optional[Dict[str, Any]]:
+        return self._core.soft_delete(user_id)
+
+    def restore(self, user_id: int) -> Optional[Dict[str, Any]]:
+        return self._core.restore(user_id)
+
+    def delete(self, entity_id: int) -> bool:
+        return self._core.delete(entity_id)
+
+    def user_exists(self, email: str, username: str) -> bool:
+        return self._core.user_exists(email, username)
+
+    # === Lookup Operations (delegate to UserLookupRepository) ===
+    def get_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        return self._lookup.get_by_email(email)
+
+    def get_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        return self._lookup.get_by_username(username)
+
+    def get_by_public_id(self, public_id: str) -> Optional[Dict[str, Any]]:
+        return self._lookup.get_by_public_id(public_id)
+
+    def get_by_username_or_email(self, identifier: str) -> Optional[Dict[str, Any]]:
+        return self._lookup.get_by_username_or_email(identifier)
+
+    # === Search Operations (delegate to UserSearchRepository) ===
+    def search(
+        self,
+        query: Optional[str] = None,
+        admin_only: Optional[bool] = None,
+        include_deleted: bool = False,
+        limit: Optional[int] = None,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        return self._search.search(query, admin_only, include_deleted, limit, offset)
+
+    def get_all(
+        self,
+        include_deleted: bool = False,
+        limit: Optional[int] = None,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        return self._search.get_all(include_deleted, limit, offset)
+
+    def count(
+        self,
+        query: Optional[str] = None,
+        admin_only: Optional[bool] = None,
+        include_deleted: bool = False
+    ) -> int:
+        return self._search.count(query, admin_only, include_deleted)
+
+    # === Role Operations (delegate to UserRoleRepository) ===
+    def get_with_roles(self, user_id: int) -> Optional[Dict[str, Any]]:
+        return self._roles.get_with_roles(user_id)
+
+    def assign_role(self, user_id: int, role_id: int) -> bool:
+        return self._roles.assign_role(user_id, role_id)
+
+    def remove_role(self, user_id: int, role_id: int) -> bool:
+        return self._roles.remove_role(user_id, role_id)
+
+    def has_role(self, user_id: int, role_name: str) -> bool:
+        return self._roles.has_role(user_id, role_name)
+
+    def get_roles(self, user_id: int) -> List[str]:
+        return self._roles.get_roles(user_id)
+
+    # === Password Operations (delegate to UserPasswordRepository) ===
+    def change_password(self, user_id: int, new_password_hash: str) -> bool:
+        return self._password.change_password(user_id, new_password_hash)

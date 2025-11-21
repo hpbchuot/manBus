@@ -153,9 +153,7 @@ class UserResponse(BaseSchema):
     username: Optional[str] = None
     public_id: Optional[str] = None
     admin: bool
-    registered_on: datetime
     updated_at: Optional[datetime] = None
-    is_deleted: bool
 
 
 class UserDetailResponse(UserResponse):

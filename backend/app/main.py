@@ -1,8 +1,9 @@
 from flask import Flask, jsonify
 from app.config.database import Database
 from app.middleware.cors import init_cors
+from app.middleware.error_handlers import register_error_handlers
 from app.controllers.auth_controller import auth_api
-from app.core.dependencies import init_container
+from app.controllers.user_controller import user_api
 import logging
 
 from app.services.factory import ServiceFactory
@@ -20,15 +21,14 @@ app = Flask(__name__)
 # Initialize CORS middleware
 init_cors(app)
 
+# Register global error handlers
+register_error_handlers(app)
+
 # Initialize database connection pool
 try:
     db = Database()
     factory = ServiceFactory(db)
-    logger.info("Database initialized successfully")
-
-    # Initialize dependency injection container
-    container = init_container(db)
-    logger.info("Dependency container initialized successfully")
+    logger.info("Database and ServiceFactory initialized successfully")
 
 except Exception as e:
     logger.error(f"Failed to initialize application: {e}")
@@ -65,6 +65,7 @@ def cleanup(exception=None):
         logger.error(f"Application error: {exception}")
 
 app.register_blueprint(auth_api, url_prefix='/auth')
+app.register_blueprint(user_api, url_prefix='/users')
 
 if __name__ == '__main__':
     try:

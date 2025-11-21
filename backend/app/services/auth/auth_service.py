@@ -325,3 +325,20 @@ class AuthService(IAuthService):
             True if admin, False otherwise
         """
         return self.token_service.verify_admin(token)
+
+    def decode_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Decode token without full verification (for debugging/logging).
+
+        Args:
+            token: JWT token to decode
+
+        Returns:
+            Decoded token data or None if malformed
+        """
+        try:
+            # Delegate to token service
+            return self.token_service.decode_token_payload(token)
+        except Exception as e:
+            logger.error(f"Error decoding token: {e}")
+            return None

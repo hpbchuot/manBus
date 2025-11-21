@@ -1,131 +1,169 @@
-from flask import request, jsonify
+from flask import request, jsonify, g, make_response
+from pydantic import ValidationError
 from . import auth_api
+from app.middleware.cookie_handler import CookieManager
+from app.middleware.error_handlers import ErrorResponse
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def get_auth_service():
+    """
+    Get auth service from request context (request-scoped injection).
+    Follows DIP - dependency injected per request, not global coupling.
+    """
+    if not hasattr(g, 'auth_service'):
+        from app.main import factory
+        g.auth_service = factory.get_auth_service()
+    return g.auth_service
+
 
 @auth_api.route('/register', methods=['POST'])
 def register_user():
-    """Register a new user"""
+    """
+    Register a new user.
+
+    Request Body:
+        - username: str
+        - email: str
+        - password: str
+        - role: str (optional)
+
+    Returns:
+        201: User registered successfully with auth cookie
+        400: Validation error or user already exists
+        500: Internal server error
+    """
     try:
         # Get request data
         data = request.get_json()
+        if not data:
+            return ErrorResponse.fail("Request body is required")
 
-        # Get auth service from factory (import lazily to avoid circular import)
-        from app.main import factory
-        auth_service = factory.get_auth_service()
+        # Get auth service (request-scoped injection)
+        auth_service = get_auth_service()
 
         # Register user
         user_dict, token = auth_service.register(data)
-        response = jsonify({
-            'status': 'success',
-            'message': 'User registered successfully',
-            'data': user_dict
-        })
 
-        # Set token in HTTP-only cookie
-        response.set_cookie(
-            'access_token',
-            token,
-            httponly=True,      # Cannot be accessed by JavaScript (XSS protection)
-            secure=False,       # Set to True in production with HTTPS
-            samesite='Lax',     # CSRF protection
-            max_age=3600        # 1 hour (same as token expiration)
+        # Create success response
+        response_data, status_code = ErrorResponse.success(
+            data=user_dict,
+            message='User registered successfully',
+            status_code=201
         )
+        response = make_response(response_data, status_code)
 
-        return response, 201
+        # Set authentication cookie using middleware
+        CookieManager.set_auth_cookie(response, token)
+
+        return response
+
+    except ValidationError as e:
+        logger.warning(f"Registration validation error: {e.errors()}")
+        return ErrorResponse.validation_error(e)
+    except ValueError as e:
+        logger.warning(f"Registration business logic error: {str(e)}")
+        return ErrorResponse.fail(str(e))
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Registration failed: {str(e)}'
-        }), 500
+        logger.error(f"Registration failed: {str(e)}", exc_info=True)
+        return ErrorResponse.error(f'Registration failed: {str(e)}')
 
 
 @auth_api.route('/login', methods=['POST'])
 def login_user():
-    """Authenticate user and return token"""
+    """
+    Authenticate user and return token.
+
+    Request Body:
+        - email: str
+        - password: str
+
+    Returns:
+        200: Login successful with auth cookie
+        400: Invalid credentials or validation error
+        500: Internal server error
+    """
     try:
         # Get request data
         data = request.get_json()
+        if not data:
+            return ErrorResponse.fail("Request body is required")
 
-        # Get auth service from factory (import lazily to avoid circular import)
-        from app.main import factory
-        auth_service = factory.get_auth_service()
+        # Get auth service (request-scoped injection)
+        auth_service = get_auth_service()
 
         # Login user
         user_dict, token = auth_service.login(data)
 
-        response = jsonify({
-            'status': 'success',
-            'message': 'Login successful',
-            'data': user_dict
-        })
-
-        # Set token in HTTP-only cookie
-        response.set_cookie(
-            'access_token',
-            token,
-            httponly=True,      # Cannot be accessed by JavaScript (XSS protection)
-            secure=False,       # Set to True in production with HTTPS
-            samesite='Lax',     # CSRF protection
-            max_age=3600        # 1 hour (same as token expiration)
+        # Create success response
+        response_data, status_code = ErrorResponse.success(
+            data=user_dict,
+            message='Login successful'
         )
+        response = make_response(response_data, status_code)
 
-        return response, 200
+        # Set authentication cookie using middleware
+        CookieManager.set_auth_cookie(response, token)
+
+        return response
+
+    except ValidationError as e:
+        logger.warning(f"Login validation error: {e.errors()}")
+        return ErrorResponse.validation_error(e)
+    except ValueError as e:
+        logger.warning(f"Login failed: {str(e)}")
+        return ErrorResponse.fail(str(e))
     except Exception as e:
-        # Log the actual error for debugging
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'status': 'error',
-            'message': f'Login failed: {str(e)}'
-        }), 500
+        logger.error(f"Login error: {str(e)}", exc_info=True)
+        return ErrorResponse.error(f'Login failed: {str(e)}')
 
 
 @auth_api.route('/logout', methods=['POST'])
 def logout_user():
-    """Logout user by blacklisting token"""
+    """
+    Logout user by blacklisting token.
+
+    Returns:
+        200: Logout successful
+        401: No authentication token found
+        400: Logout failed
+        500: Internal server error
+    """
     try:
         # Get token from cookie
-        token = request.cookies.get('access_token')
+        token = request.cookies.get(CookieManager.AUTH_COOKIE_NAME)
 
         if not token:
-            return jsonify({
-                'status': 'fail',
-                'message': 'No authentication token found'
-            }), 401
+            logger.warning("Logout attempted without token")
+            return ErrorResponse.unauthorized('No authentication token found')
 
-        # Get auth service from factory (import lazily to avoid circular import)
-        from app.main import factory
-        auth_service = factory.get_auth_service()
+        # Get auth service (request-scoped injection)
+        auth_service = get_auth_service()
 
         # Logout user
         result = auth_service.logout(token)
 
         if result:
-            response = jsonify({
-                'status': 'success',
-                'message': 'Logout successful'
-            })
-
-            # Clear the cookie
-            response.set_cookie(
-                'access_token',
-                '',
-                httponly=True,
-                secure=False,
-                samesite='Lax',
-                max_age=0  # Expire immediately
+            # Create success response
+            response_data, status_code = ErrorResponse.success(
+                message='Logout successful'
             )
+            response = make_response(response_data, status_code)
 
-            return response, 200
+            # Clear authentication cookies using middleware
+            CookieManager.clear_all_auth_cookies(response)
+
+            logger.info("User logged out successfully")
+            return response
         else:
-            return jsonify({
-                'status': 'fail',
-                'message': 'Logout failed'
-            }), 400
+            logger.warning("Logout operation returned False")
+            return ErrorResponse.fail('Logout failed')
 
+    except ValueError as e:
+        logger.warning(f"Logout business logic error: {str(e)}")
+        return ErrorResponse.fail(str(e))
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'status': 'error',
-            'message': f'Logout failed: {str(e)}'
-        }), 500
+        logger.error(f"Logout error: {str(e)}", exc_info=True)
+        return ErrorResponse.error(f'Logout failed: {str(e)}')
