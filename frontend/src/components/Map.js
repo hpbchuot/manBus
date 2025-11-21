@@ -646,13 +646,13 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMap,
-  ZoomControl,
-  Polyline,
+    MapContainer,
+    TileLayer,
+    Marker,
+    Popup,
+    useMap,
+    ZoomControl,
+    Polyline,
 } from "react-leaflet";
 import ControlPanel from "./ControlPanel";
 import "leaflet/dist/leaflet.css";
@@ -668,277 +668,277 @@ import { ICONS } from "../constansts/mapIcons";
 import requestApi from "../helpers/api";
 // Custom hook để quản lý bus tracking
 const modalStyles = {
-  position: "fixed",
-  bottom: 20,
-  right: 20,
-  width: 350,
-  bgcolor: "background.paper",
-  boxShadow: 24,
-  p: 3,
-  borderRadius: "8px",
+    position: "fixed",
+    bottom: 20,
+    right: 20,
+    width: 350,
+    bgcolor: "background.paper",
+    boxShadow: 24,
+    p: 3,
+    borderRadius: "8px",
 };
 const useBusTracking = (route_id, isTracking) => {
-  const [currentPosition, setCurrentPosition] = useState(null);
-  const [routeHistory, setRouteHistory] = useState([]);
+    const [currentPosition, setCurrentPosition] = useState(null);
+    const [routeHistory, setRouteHistory] = useState([]);
 
-  useEffect(() => {
-    if (!isTracking || !route_id) return;
+    useEffect(() => {
+        if (!isTracking || !route_id) return;
 
-    const updatePosition = async () => {
-      try {
-        const response = await requestApi("/map/get-location", "POST", {
-          id: route_id,
-        });
-        const { lat, lng } = response.data;
-        // console.log(lat, lng);
-        if (lat && lng) {
-          setCurrentPosition([lat, lng]);
-          setRouteHistory((prev) => [...prev, [lat, lng]]);
-        }
-      } catch (error) {
-        console.error("Error tracking bus:", error);
-      }
+        const updatePosition = async () => {
+            try {
+                const response = await requestApi("/map/get-location", "POST", {
+                    id: route_id,
+                });
+                const { lat, lng } = response.data;
+                // console.log(lat, lng);
+                if (lat && lng) {
+                    setCurrentPosition([lat, lng]);
+                    setRouteHistory((prev) => [...prev, [lat, lng]]);
+                }
+            } catch (error) {
+                console.error("Error tracking bus:", error);
+            }
+        };
+
+        const intervalId = setInterval(updatePosition, 2000);
+        return () => clearInterval(intervalId);
+    }, [route_id, isTracking]);
+    const resetRouteHistory = () => {
+        setRouteHistory([]); // Reset routeHistory
     };
-
-    const intervalId = setInterval(updatePosition, 2000);
-    return () => clearInterval(intervalId);
-  }, [route_id, isTracking]);
-  const resetRouteHistory = () => {
-    setRouteHistory([]); // Reset routeHistory
-  };
-  return { currentPosition, routeHistory, resetRouteHistory };
+    return { currentPosition, routeHistory, resetRouteHistory };
 };
 
 // BusRoute component để hiển thị đường đi
 const BusRoute = ({ startPoint, endPoint, currentPosition, routeHistory }) => {
-  const map = useMap();
-  const [routingControl, setRoutingControl] = useState(null);
-  const [plannedRoute, setPlannedRoute] = useState([]);
-  // useEffect(() => {
-  //   if (startPoint && endPoint) {
-  //     const bounds = L.latLngBounds([startPoint, endPoint]);
-  //     map.fitBounds(bounds, { padding: [50, 50] });
-  //   }
-  // }, [startPoint, endPoint, map]);
-  useEffect(() => {
-    if (startPoint && endPoint) {
-      const control = L.Routing.control({
-        waypoints: [L.latLng(startPoint), L.latLng(endPoint)],
-        routeWhileDragging: false,
-        addWaypoints: false,
-        draggableWaypoints: false,
-        fitSelectedRoutes: true,
-        show: false,
-        lineOptions: {
-          styles: [
-            { color: "gray", opacity: 0.6, weight: 4, dashArray: "10, 10" },
-          ],
-        },
-      }).addTo(map);
+    const map = useMap();
+    const [routingControl, setRoutingControl] = useState(null);
+    const [plannedRoute, setPlannedRoute] = useState([]);
+    // useEffect(() => {
+    //   if (startPoint && endPoint) {
+    //     const bounds = L.latLngBounds([startPoint, endPoint]);
+    //     map.fitBounds(bounds, { padding: [50, 50] });
+    //   }
+    // }, [startPoint, endPoint, map]);
+    useEffect(() => {
+        if (startPoint && endPoint) {
+            const control = L.Routing.control({
+                waypoints: [L.latLng(startPoint), L.latLng(endPoint)],
+                routeWhileDragging: false,
+                addWaypoints: false,
+                draggableWaypoints: false,
+                fitSelectedRoutes: true,
+                show: false,
+                lineOptions: {
+                    styles: [
+                        { color: "gray", opacity: 0.6, weight: 4, dashArray: "10, 10" },
+                    ],
+                },
+            }).addTo(map);
 
-      // Lưu planned route khi có kết quả routing
-      control.on("routesfound", (e) => {
-        const coordinates = e.routes[0].coordinates;
-        setPlannedRoute(coordinates);
-      });
+            // Lưu planned route khi có kết quả routing
+            control.on("routesfound", (e) => {
+                const coordinates = e.routes[0].coordinates;
+                setPlannedRoute(coordinates);
+            });
 
-      setRoutingControl(control);
+            setRoutingControl(control);
 
-      // Fit bounds
-      const bounds = L.latLngBounds([startPoint, endPoint]);
-      map.fitBounds(bounds, { padding: [50, 50] });
+            // Fit bounds
+            const bounds = L.latLngBounds([startPoint, endPoint]);
+            map.fitBounds(bounds, { padding: [50, 50] });
 
-      return () => {
-        map.removeControl(control);
-      };
-    }
-  }, [startPoint, endPoint, map]);
-  const completedRoute = useMemo(
-    () => <Polyline positions={routeHistory} color="blue" weight={4} />,
-    [routeHistory]
-  );
-  const remainingRoute = useMemo(() => {
-    if (!currentPosition || !plannedRoute.length) return null;
-
-    // Tìm điểm gần nhất trên planned route với vị trí hiện tại
-    const currentIndex = plannedRoute.findIndex((point, index) => {
-      if (index === plannedRoute.length - 1) return true;
-      const d1 = L.latLng(currentPosition).distanceTo(L.latLng(point));
-      const d2 = L.latLng(currentPosition).distanceTo(
-        L.latLng(plannedRoute[index + 1])
-      );
-      return d1 < d2;
-    });
-
-    // Lấy phần route còn lại
-    const remainingPoints = plannedRoute.slice(currentIndex);
-
-    return (
-      <Polyline
-        positions={remainingPoints}
-        color="yellow"
-        weight={3}
-        dashArray="10, 10"
-      />
+            return () => {
+                map.removeControl(control);
+            };
+        }
+    }, [startPoint, endPoint, map]);
+    const completedRoute = useMemo(
+        () => <Polyline positions={routeHistory} color="blue" weight={4} />,
+        [routeHistory]
     );
-  }, [currentPosition, plannedRoute]);
-  return (
-    <>
-      {completedRoute}
-      {/* {remainingRoute} */}
-      {startPoint && (
-        <Marker position={startPoint} icon={ICONS.START}>
-          <Popup>Điểm đầu</Popup>
-        </Marker>
-      )}
-      {endPoint && (
-        <Marker position={endPoint} icon={ICONS.END}>
-          <Popup>Điểm cuối</Popup>
-        </Marker>
-      )}
-      {currentPosition && (
-        <Marker position={currentPosition} icon={ICONS.BUS}>
-          <Popup>Xe bus</Popup>
-        </Marker>
-      )}
-    </>
-  );
+    const remainingRoute = useMemo(() => {
+        if (!currentPosition || !plannedRoute.length) return null;
+
+        // Tìm điểm gần nhất trên planned route với vị trí hiện tại
+        const currentIndex = plannedRoute.findIndex((point, index) => {
+            if (index === plannedRoute.length - 1) return true;
+            const d1 = L.latLng(currentPosition).distanceTo(L.latLng(point));
+            const d2 = L.latLng(currentPosition).distanceTo(
+                L.latLng(plannedRoute[index + 1])
+            );
+            return d1 < d2;
+        });
+
+        // Lấy phần route còn lại
+        const remainingPoints = plannedRoute.slice(currentIndex);
+
+        return (
+            <Polyline
+                positions={remainingPoints}
+                color="yellow"
+                weight={3}
+                dashArray="10, 10"
+            />
+        );
+    }, [currentPosition, plannedRoute]);
+    return (
+        <>
+            {completedRoute}
+            {/* {remainingRoute} */}
+            {startPoint && (
+                <Marker position={startPoint} icon={ICONS.START}>
+                    <Popup>Điểm đầu</Popup>
+                </Marker>
+            )}
+            {endPoint && (
+                <Marker position={endPoint} icon={ICONS.END}>
+                    <Popup>Điểm cuối</Popup>
+                </Marker>
+            )}
+            {currentPosition && (
+                <Marker position={currentPosition} icon={ICONS.BUS}>
+                    <Popup>Xe bus</Popup>
+                </Marker>
+            )}
+        </>
+    );
 };
 
 // FeedbackModal component
 const FeedbackModal = ({ open, onClose, busId }) => {
-  const [feedback, setFeedback] = useState("");
-  const { t } = useTranslation();
+    const [feedback, setFeedback] = useState("");
+    const { t } = useTranslation();
 
-  const mutation = useMutation({
-    mutationFn: (data) => requestApi("/feedback/add", "POST", data),
-    onSuccess: (response) => {
-      toast.success(response.data.message);
-      setFeedback("");
-      onClose();
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || "Error sending feedback");
-    },
-  });
+    const mutation = useMutation({
+        mutationFn: (data) => requestApi("/feedback/add", "POST", data),
+        onSuccess: (response) => {
+            toast.success(response.data.message);
+            setFeedback("");
+            onClose();
+        },
+        onError: (error) => {
+            toast.error(error.response?.data?.message || "Error sending feedback");
+        },
+    });
 
-  return (
-    <Modal open={open} onClose={onClose}>
-      <Box sx={modalStyles.container}>{/* Modal content */}</Box>
-    </Modal>
-  );
+    return (
+        <Modal open={open} onClose={onClose}>
+            <Box sx={modalStyles.container}>{/* Modal content */}</Box>
+        </Modal>
+    );
 };
 
 // Main Map component
 const Map = () => {
-  const dispatch = useDispatch();
-  const mapData = useSelector((state) => state.mapSearch);
-  const [routePoints, setRoutePoints] = useState({ start: null, end: null });
-  const [isTracking, setIsTracking] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(false);
-  const { t } = useTranslation();
+    const dispatch = useDispatch();
+    const mapData = useSelector((state) => state.mapSearch);
+    const [routePoints, setRoutePoints] = useState({ start: null, end: null });
+    const [isTracking, setIsTracking] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
+    const { t } = useTranslation();
 
-  const { currentPosition, routeHistory, resetRouteHistory } = useBusTracking(
-    mapData.routeId,
-    isTracking
-  );
+    const { currentPosition, routeHistory, resetRouteHistory } = useBusTracking(
+        mapData.routeId,
+        isTracking
+    );
 
-  // Fetch route points
-  const fetchRoutePoints = useCallback(async () => {
-    if (!mapData.search) return;
+    // Fetch route points
+    const fetchRoutePoints = useCallback(async () => {
+        if (!mapData.search) return;
 
-    try {
-      dispatch(actions.controlLoading(true));
-      const response = await requestApi(
-        `/bus/get-st-end?bus_id=${mapData.busNumber}`,
-        "GET"
-      );
-      console.log(response);
-      setRoutePoints({
-        start: response.data.start,
-        end: response.data.end,
-      });
-      setIsTracking(true);
+        try {
+            dispatch(actions.controlLoading(true));
+            const response = await requestApi(
+                `/bus/get-st-end?bus_id=${mapData.busNumber}`,
+                "GET"
+            );
+            console.log(response);
+            setRoutePoints({
+                start: response.data.start,
+                end: response.data.end,
+            });
+            setIsTracking(true);
 
-      toast.success(response.data.message);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Error fetching route");
-    } finally {
-      dispatch(actions.controlLoading(false));
-    }
-  }, [mapData.search, mapData.busNumber]);
+            toast.success(response.data.message);
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Error fetching route");
+        } finally {
+            dispatch(actions.controlLoading(false));
+        }
+    }, [mapData.search, mapData.busNumber]);
 
-  useEffect(() => {
-    fetchRoutePoints();
-  }, [fetchRoutePoints]);
-  useEffect(() => {
-    if (
-      currentPosition &&
-      routePoints.end &&
-      L.latLng(currentPosition).equals(L.latLng(routePoints.end))
-    ) {
-      resetRouteHistory(); // Gọi hàm reset khi đến điểm cuối
-    }
-  }, [currentPosition, routePoints.end, resetRouteHistory]);
-  const handleStopTracking = () => {
-    setIsTracking(false);
-    resetRouteHistory();
-    setRoutePoints({ start: null, end: null });
-    dispatch(actions.setSharedData({ search: false }));
-  };
+    useEffect(() => {
+        fetchRoutePoints();
+    }, [fetchRoutePoints]);
+    useEffect(() => {
+        if (
+            currentPosition &&
+            routePoints.end &&
+            L.latLng(currentPosition).equals(L.latLng(routePoints.end))
+        ) {
+            resetRouteHistory(); // Gọi hàm reset khi đến điểm cuối
+        }
+    }, [currentPosition, routePoints.end, resetRouteHistory]);
+    const handleStopTracking = () => {
+        setIsTracking(false);
+        resetRouteHistory();
+        setRoutePoints({ start: null, end: null });
+        dispatch(actions.setSharedData({ search: false }));
+    };
 
-  return (
-    <div
-      style={{
-        position: "relative",
-        height: "100vh",
-        width: "100vw",
-        overflow: "hidden",
-      }}
-    >
-      <MapContainer
-        center={[21.0285, 105.8542]}
-        zoom={12}
-        scrollWheelZoom={true}
-        zoomControl={false}
-        style={{
-          height: "100%",
-          width: "100%",
-          position: "absolute",
-          top: 0,
-          left: 0,
-        }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {isTracking && (
-          <BusRoute
-            startPoint={routePoints.start}
-            endPoint={routePoints.end}
-            currentPosition={currentPosition}
-            routeHistory={routeHistory}
-          />
-        )}
-        <ZoomControl position="bottomright" />
-      </MapContainer>
+    return (
+        <div
+            style={{
+                position: "relative",
+                height: "100vh",
+                width: "100vw",
+                overflow: "hidden",
+            }}
+        >
+            <MapContainer
+                center={[21.0285, 105.8542]}
+                zoom={12}
+                scrollWheelZoom={true}
+                zoomControl={false}
+                style={{
+                    height: "100%",
+                    width: "100%",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                }}
+            >
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {isTracking && (
+                    <BusRoute
+                        startPoint={routePoints.start}
+                        endPoint={routePoints.end}
+                        currentPosition={currentPosition}
+                        routeHistory={routeHistory}
+                    />
+                )}
+                <ZoomControl position="bottomright" />
+            </MapContainer>
 
-      {isTracking && (
-        <ControlPanel
-          onStopTracking={handleStopTracking}
-          onFeedback={() => setShowFeedback(true)}
-          isLoggedIn={!!localStorage.getItem("access_token")}
-        />
-      )}
+            {isTracking && (
+                <ControlPanel
+                    onStopTracking={handleStopTracking}
+                    onFeedback={() => setShowFeedback(true)}
+                    isLoggedIn={!!localStorage.getItem("access_token")}
+                />
+            )}
 
-      <FeedbackModal
-        open={showFeedback}
-        onClose={() => setShowFeedback(false)}
-        busId={mapData.busNumber}
-      />
-    </div>
-  );
+            <FeedbackModal
+                open={showFeedback}
+                onClose={() => setShowFeedback(false)}
+                busId={mapData.busNumber}
+            />
+        </div>
+    );
 };
 
 export default Map;

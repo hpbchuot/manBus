@@ -32,15 +32,15 @@ function App() {
         {/* man route */}
 
 
-        <Route element={<Main />}>
+
           <Route path="/" element={<Map />} />
           <Route path="/test123" element={<RouteMap />} />
           <Route path="/driver" element={<MapDriver />} />
-        </Route>
-        <Route element={<PublicRoutes />}>
+
+
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-        </Route>
+
 
         {/* Private Routes */}
 
