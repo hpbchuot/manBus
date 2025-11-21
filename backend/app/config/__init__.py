@@ -1,0 +1,1 @@
+from .security import JWT_SECRET_KEY
