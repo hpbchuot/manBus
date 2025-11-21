@@ -1,4 +1,22 @@
-from flask import Blueprint
+"""
+Controllers package for ManBus application.
+Handles HTTP request/response for all API endpoints.
+"""
 
-auth_api = Blueprint('auth_api', __name__)
-user_api = Blueprint('user_api', __name__)
+# Import all blueprints from controllers
+from app.controllers.auth_controller import auth_api
+from app.controllers.user_controller import user_api
+from app.controllers.bus_controller import bus_api
+from app.controllers.driver_controller import driver_api
+from app.controllers.route_controller import route_api, stop_api
+from app.controllers.feedback_controller import feedback_api
+
+__all__ = [
+    'auth_api',
+    'user_api',
+    'bus_api',
+    'driver_api',
+    'route_api',
+    'stop_api',
+    'feedback_api',
+]

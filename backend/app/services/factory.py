@@ -27,13 +27,16 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.auth_repository import AuthRepository
 from app.repositories.bus_repository import BusRepository
 from app.repositories.driver_repository import DriverRepository
-from app.repositories.route_repository import RouteRepository
+from app.repositories.route_repository import RouteRepository, StopRepository
 from app.repositories.feedback_repository import FeedbackRepository
 from app.services.auth.password_service import PasswordService
 from app.services.auth.token_service import TokenService
 from app.services.auth.auth_service import AuthService
 from app.services.user.user_service import UserService
 from app.services.bus.bus_service import BusService
+from app.services.driver.driver_service import DriverService
+from app.services.route.route_service import RouteService, StopService
+from app.services.feedback.feedback_service import FeedbackService
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,7 @@ class ServiceFactory:
         self._service_creators['bus_repository'] = lambda: BusRepository(self.db)
         self._service_creators['driver_repository'] = lambda: DriverRepository(self.db)
         self._service_creators['route_repository'] = lambda: RouteRepository(self.db)
+        self._service_creators['stop_repository'] = lambda: StopRepository(self.db)
         self._service_creators['feedback_repository'] = lambda: FeedbackRepository(self.db)
 
         # Service creators
@@ -98,6 +102,18 @@ class ServiceFactory:
         )
         self._service_creators['bus_service'] = lambda: BusService(
             bus_repository=self.get('bus_repository')
+        )
+        self._service_creators['driver_service'] = lambda: DriverService(
+            driver_repository=self.get('driver_repository')
+        )
+        self._service_creators['route_service'] = lambda: RouteService(
+            route_repository=self.get('route_repository')
+        )
+        self._service_creators['stop_service'] = lambda: StopService(
+            stop_repository=self.get('stop_repository')
+        )
+        self._service_creators['feedback_service'] = lambda: FeedbackService(
+            feedback_repository=self.get('feedback_repository')
         )
 
     def get(self, service_name: str) -> Any:
@@ -162,6 +178,10 @@ class ServiceFactory:
         """Get or create FeedbackRepository instance"""
         return self.get('feedback_repository')
 
+    def get_stop_repository(self) -> StopRepository:
+        """Get or create StopRepository instance"""
+        return self.get('stop_repository')
+
     def get_password_service(self) -> PasswordService:
         """Get or create PasswordService instance"""
         return self.get('password_service')
@@ -181,6 +201,22 @@ class ServiceFactory:
     def get_bus_service(self) -> BusService:
         """Get or create BusService instance"""
         return self.get('bus_service')
+
+    def get_driver_service(self) -> DriverService:
+        """Get or create DriverService instance"""
+        return self.get('driver_service')
+
+    def get_route_service(self) -> RouteService:
+        """Get or create RouteService instance"""
+        return self.get('route_service')
+
+    def get_stop_service(self) -> StopService:
+        """Get or create StopService instance"""
+        return self.get('stop_service')
+
+    def get_feedback_service(self) -> FeedbackService:
+        """Get or create FeedbackService instance"""
+        return self.get('feedback_service')
 
     def reset(self):
         """
