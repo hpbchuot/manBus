@@ -99,8 +99,8 @@ $$ LANGUAGE plpgsql;
 -- Usage: SELECT fn_create_stop('Stop 1', 10.8231, 106.6297);
 CREATE OR REPLACE FUNCTION fn_create_stop(
     p_stop_name VARCHAR(255),
-    p_lat NUMERIC,
-    p_lon NUMERIC
+    p_lat DOUBLE PRECISION,
+    p_lon DOUBLE PRECISION
 )
 RETURNS INT AS $$
 DECLARE
@@ -265,12 +265,12 @@ $$ LANGUAGE plpgsql;
 -- Description: Calculates route length in meters
 -- Parameters:
 --   p_route_id: Route ID
--- Returns: NUMERIC - Length in meters
+-- Returns: DOUBLE PRECISION - Length in meters
 -- Usage: SELECT fn_get_route_length(1);
 CREATE OR REPLACE FUNCTION fn_get_route_length(p_route_id INT)
-RETURNS NUMERIC AS $$
+RETURNS DOUBLE PRECISION AS $$
 DECLARE
-    route_length NUMERIC;
+    route_length DOUBLE PRECISION;
     v_route_geom GEOMETRY;
 BEGIN
     SELECT route_geom INTO v_route_geom
@@ -302,17 +302,17 @@ $$ LANGUAGE plpgsql STABLE;
 -- Returns: TABLE with stop information and distance
 -- Usage: SELECT * FROM fn_find_nearest_stops(10.8231, 106.6297, 1000, 10);
 CREATE OR REPLACE FUNCTION fn_find_nearest_stops(
-    p_lat NUMERIC,
-    p_lon NUMERIC,
+    p_lat DOUBLE PRECISION,
+    p_lon DOUBLE PRECISION,
     p_radius_meters INT DEFAULT 1000,
     p_limit INT DEFAULT 10
 )
 RETURNS TABLE (
     stop_id INT,
     stop_name VARCHAR(255),
-    distance_meters NUMERIC,
-    latitude NUMERIC,
-    longitude NUMERIC
+    distance_meters DOUBLE PRECISION,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION
 ) AS $$
 DECLARE
     v_point GEOMETRY(POINT, 4326);
@@ -346,14 +346,14 @@ $$ LANGUAGE plpgsql STABLE;
 -- Returns: TABLE with route information and distance
 -- Usage: SELECT * FROM fn_find_routes_near_location(10.8231, 106.6297, 500);
 CREATE OR REPLACE FUNCTION fn_find_routes_near_location(
-    p_lat NUMERIC,
-    p_lon NUMERIC,
+    p_lat DOUBLE PRECISION,
+    p_lon DOUBLE PRECISION,
     p_radius_meters INT DEFAULT 500
 )
 RETURNS TABLE (
     route_id INT,
     route_name VARCHAR(100),
-    distance_meters NUMERIC
+    distance_meters DOUBLE PRECISION
 ) AS $$
 DECLARE
     v_point GEOMETRY(POINT, 4326);
@@ -387,8 +387,8 @@ $$ LANGUAGE plpgsql STABLE;
 -- Usage: SELECT fn_is_point_on_route(1, 10.8231, 106.6297, 100);
 CREATE OR REPLACE FUNCTION fn_is_point_on_route(
     p_route_id INT,
-    p_lat NUMERIC,
-    p_lon NUMERIC,
+    p_lat DOUBLE PRECISION,
+    p_lon DOUBLE PRECISION,
     p_tolerance_meters INT DEFAULT 100
 )
 RETURNS BOOLEAN AS $$
@@ -429,8 +429,8 @@ RETURNS TABLE (
     stop_id INT,
     stop_name VARCHAR(255),
     stop_sequence INT,
-    latitude NUMERIC,
-    longitude NUMERIC
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -460,7 +460,7 @@ RETURNS TABLE (
     route_id INT,
     route_name VARCHAR(100),
     stop_count BIGINT,
-    route_length_meters NUMERIC
+    route_length_meters DOUBLE PRECISION
 ) AS $$
 BEGIN
     RETURN QUERY
