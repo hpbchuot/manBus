@@ -81,8 +81,8 @@ $$ LANGUAGE plpgsql;
 -- Usage: SELECT fn_update_bus_location(1, 10.8231, 106.6297);
 CREATE OR REPLACE FUNCTION fn_update_bus_location(
     p_bus_id INT,
-    p_lat NUMERIC,
-    p_lon NUMERIC
+    p_lat DOUBLE PRECISION,
+    p_lon DOUBLE PRECISION
 )
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -206,8 +206,8 @@ RETURNS TABLE (
     name VARCHAR(100),
     model VARCHAR(50),
     status VARCHAR(20),
-    current_latitude NUMERIC,
-    current_longitude NUMERIC
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -239,8 +239,8 @@ $$ LANGUAGE plpgsql STABLE;
 -- Returns: TABLE with bus information and distance
 -- Usage: SELECT * FROM fn_find_nearest_bus(10.8231, 106.6297, NULL, 5);
 CREATE OR REPLACE FUNCTION fn_find_nearest_bus(
-    p_lat NUMERIC,
-    p_lon NUMERIC,
+    p_lat DOUBLE PRECISION,
+    p_lon DOUBLE PRECISION,
     p_route_id INT DEFAULT NULL,
     p_limit INT DEFAULT 5
 )
@@ -251,9 +251,9 @@ RETURNS TABLE (
     route_id INT,
     route_name VARCHAR(100),
     status VARCHAR(20),
-    distance_meters NUMERIC,
-    current_latitude NUMERIC,
-    current_longitude NUMERIC
+    distance_meters DOUBLE PRECISION,
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION
 ) AS $$
 DECLARE
     v_point GEOMETRY(POINT, 4326);
@@ -351,8 +351,8 @@ RETURNS TABLE (
     status VARCHAR(20),
     route_id INT,
     route_name VARCHAR(100),
-    current_latitude NUMERIC,
-    current_longitude NUMERIC
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -392,8 +392,8 @@ RETURNS TABLE (
     status VARCHAR(20),
     route_id INT,
     route_name VARCHAR(100),
-    current_latitude NUMERIC,
-    current_longitude NUMERIC
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -427,14 +427,14 @@ CREATE OR REPLACE FUNCTION fn_get_bus_location_details(p_bus_id INT)
 RETURNS TABLE (
     bus_id INT,
     bus_name VARCHAR(100),
-    current_latitude NUMERIC,
-    current_longitude NUMERIC,
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION,
     route_id INT,
     route_name VARCHAR(100),
     is_on_route BOOLEAN,
     nearest_stop_id INT,
     nearest_stop_name VARCHAR(255),
-    distance_to_stop_meters NUMERIC
+    distance_to_stop_meters DOUBLE PRECISION
 ) AS $$
 DECLARE
     v_current_location GEOMETRY;
