@@ -110,8 +110,8 @@ CREATE TRIGGER trg_buses_validate_status
 CREATE OR REPLACE FUNCTION trg_buses_validate_location()
 RETURNS TRIGGER AS $$
 DECLARE
-    lat NUMERIC;
-    lon NUMERIC;
+    lat DOUBLE PRECISION;
+    lon DOUBLE PRECISION;
 BEGIN
     IF NEW.current_location IS NOT NULL THEN
         lat := ST_Y(NEW.current_location);
@@ -229,8 +229,8 @@ CREATE TRIGGER trg_feedback_check_user_deleted
 CREATE OR REPLACE FUNCTION trg_stops_validate_location()
 RETURNS TRIGGER AS $$
 DECLARE
-    lat NUMERIC;
-    lon NUMERIC;
+    lat DOUBLE PRECISION;
+    lon DOUBLE PRECISION;
 BEGIN
     lat := ST_Y(NEW.location);
     lon := ST_X(NEW.location);

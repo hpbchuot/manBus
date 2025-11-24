@@ -4,6 +4,10 @@ from app.middleware.cors import init_cors
 from app.middleware.error_handlers import register_error_handlers
 from app.controllers.auth_controller import auth_api
 from app.controllers.user_controller import user_api
+from app.controllers.bus_controller import bus_api
+from app.controllers.driver_controller import driver_api
+from app.controllers.route_controller import route_api, stop_api
+from app.controllers.feedback_controller import feedback_api
 import logging
 
 from app.services.factory import ServiceFactory
@@ -64,8 +68,16 @@ def cleanup(exception=None):
     if exception:
         logger.error(f"Application error: {exception}")
 
-app.register_blueprint(auth_api, url_prefix='/auth')
-app.register_blueprint(user_api, url_prefix='/users')
+# Register API blueprints with URL prefixes
+app.register_blueprint(auth_api, url_prefix='/api/auth')
+app.register_blueprint(user_api, url_prefix='/api/users')
+app.register_blueprint(bus_api, url_prefix='/api/buses')
+app.register_blueprint(driver_api, url_prefix='/api/drivers')
+app.register_blueprint(route_api, url_prefix='/api/routes')
+app.register_blueprint(stop_api, url_prefix='/api/stops')
+app.register_blueprint(feedback_api, url_prefix='/api/feedback')
+
+logger.info("All API blueprints registered successfully")
 
 if __name__ == '__main__':
     try:

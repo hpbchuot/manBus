@@ -16,7 +16,7 @@
 --   lon: Longitude value to validate
 -- Returns: BOOLEAN - TRUE if valid, FALSE otherwise
 -- Usage: SELECT fn_validate_coordinates(10.8231, 106.6297);
-CREATE OR REPLACE FUNCTION fn_validate_coordinates(lat NUMERIC, lon NUMERIC)
+CREATE OR REPLACE FUNCTION fn_validate_coordinates(lat DOUBLE PRECISION, lon DOUBLE PRECISION)
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN lat IS NOT NULL
@@ -86,14 +86,14 @@ $$ LANGUAGE plpgsql VOLATILE;
 -- Parameters:
 --   meters: Distance in meters
 --   latitude: Latitude at which to calculate (affects longitude conversion)
--- Returns: NUMERIC - Approximate degrees
+-- Returns: DOUBLE PRECISION - Approximate degrees
 -- Note: This is an approximation. For precise calculations, use PostGIS ST_DWithin
 -- Usage: SELECT fn_meters_to_degrees(1000, 10.8231);
-CREATE OR REPLACE FUNCTION fn_meters_to_degrees(meters NUMERIC, latitude NUMERIC DEFAULT 0)
-RETURNS NUMERIC AS $$
+CREATE OR REPLACE FUNCTION fn_meters_to_degrees(meters DOUBLE PRECISION, latitude DOUBLE PRECISION DEFAULT 0)
+RETURNS DOUBLE PRECISION AS $$
 DECLARE
-    meters_per_degree NUMERIC := 111320; -- meters per degree at equator
-    cos_lat NUMERIC;
+    meters_per_degree DOUBLE PRECISION := 111320; -- meters per degree at equator
+    cos_lat DOUBLE PRECISION;
 BEGIN
     -- Convert latitude to radians and get cosine for longitude adjustment
     cos_lat := COS(RADIANS(latitude));
@@ -116,7 +116,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 --   lon: Longitude
 -- Returns: GEOMETRY(POINT, 4326) - PostGIS point
 -- Usage: SELECT fn_create_point(10.8231, 106.6297);
-CREATE OR REPLACE FUNCTION fn_create_point(lat NUMERIC, lon NUMERIC)
+CREATE OR REPLACE FUNCTION fn_create_point(lat DOUBLE PRECISION, lon DOUBLE PRECISION)
 RETURNS GEOMETRY(POINT, 4326) AS $$
 BEGIN
     IF NOT fn_validate_coordinates(lat, lon) THEN
@@ -142,8 +142,8 @@ RETURNS GEOMETRY(LINESTRING, 4326) AS $$
 DECLARE
     point_array GEOMETRY[];
     coord JSONB;
-    lat NUMERIC;
-    lon NUMERIC;
+    lat DOUBLE PRECISION;
+    lon DOUBLE PRECISION;
 BEGIN
     -- Validate minimum 2 points
     IF jsonb_array_length(coordinates) < 2 THEN
@@ -153,8 +153,8 @@ BEGIN
     -- Build array of points
     FOR coord IN SELECT * FROM jsonb_array_elements(coordinates)
     LOOP
-        lat := (coord->>0)::NUMERIC;
-        lon := (coord->>1)::NUMERIC;
+        lat := (coord->>0)::DOUBLE PRECISION;
+        lon := (coord->>1)::DOUBLE PRECISION;
 
         IF NOT fn_validate_coordinates(lat, lon) THEN
             RAISE EXCEPTION 'Invalid coordinates in array: lat=%, lon=%', lat, lon;
@@ -176,15 +176,15 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- Parameters:
 --   lat1, lon1: First point coordinates
 --   lat2, lon2: Second point coordinates
--- Returns: NUMERIC - Distance in meters
+-- Returns: DOUBLE PRECISION - Distance in meters
 -- Usage: SELECT fn_calculate_distance(10.8231, 106.6297, 10.8241, 106.6307);
 CREATE OR REPLACE FUNCTION fn_calculate_distance(
-    lat1 NUMERIC,
-    lon1 NUMERIC,
-    lat2 NUMERIC,
-    lon2 NUMERIC
+    lat1 DOUBLE PRECISION,
+    lon1 DOUBLE PRECISION,
+    lat2 DOUBLE PRECISION,
+    lon2 DOUBLE PRECISION
 )
-RETURNS NUMERIC AS $$
+RETURNS DOUBLE PRECISION AS $$
 DECLARE
     point1 GEOMETRY;
     point2 GEOMETRY;
