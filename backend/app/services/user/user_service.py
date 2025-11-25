@@ -15,7 +15,6 @@ import uuid
 from typing import Optional, List
 
 from app.repositories.user_repository import UserRepository
-from app.services.auth.password_service import PasswordService
 from app.schemas.user_schemas import (
     UserCreate,
     UserUpdate,
@@ -36,10 +35,9 @@ class UserCrudService:
     Single Responsibility: Basic user lifecycle management.
     """
 
-    def __init__(self, user_repository: UserRepository, password_service: PasswordService):
+    def __init__(self, user_repository: UserRepository):
         """Initialize with dependencies."""
         self.user_repo = user_repository
-        self.password_service = password_service
 
     def create_user(self, user_data: UserCreate) -> UserResponse:
         """
@@ -59,21 +57,13 @@ class UserCrudService:
             if self.user_repo.user_exists(user_data.email, user_data.username):
                 raise ValueError("User with this email or username already exists")
 
-            # Hash password
-            password_hash = self.password_service.hash_password(user_data.password)
-
-            # Generate public_id
-            public_id = str(uuid.uuid4())
-
             # Prepare entity for repository
             entity = {
                 'name': user_data.name,
                 'phone': user_data.phone,
                 'email': user_data.email,
                 'username': user_data.username,
-                'password_hash': password_hash,
-                'public_id': public_id,
-                'admin': user_data.admin
+                'password': user_data.password
             }
 
             # Create user via repository
@@ -315,52 +305,32 @@ class UserSearchService:
 
     def get_all_users(
         self,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = None,
+        role: Optional[str] = None,
         include_deleted: bool = False,
-        pagination: Optional[PaginationParams] = None
-    ) -> List[UserResponse] | PaginatedResponse:
+    ) -> List[UserResponse]:
         """
-        Get all users.
+        Get all users with cursor-based pagination.
 
         Args:
-            include_deleted: Include soft-deleted users
-            pagination: Optional pagination
+            cursor: Optional cursor for pagination (user ID from last result)
+            limit: Optional limit for number of users (default 20, max 100)
+            role: Optional role to filter users
+            include_deleted: Whether to include soft-deleted users
 
         Returns:
-            List of UserResponse or PaginatedResponse
+            List of UserResponse (use last item's ID as cursor for next page)
         """
         try:
-            if pagination:
-                # Get total count
-                total = self.user_repo.count(include_deleted=include_deleted)
+            user_dicts = self.user_repo.get_all(cursor, limit, role, include_deleted)
 
-                # Get paginated items
-                user_dicts = self.user_repo.get_all(
-                    include_deleted=include_deleted,
-                    limit=pagination.limit,
-                    offset=pagination.offset
-                )
+            users = []
+            for user_dict in user_dicts:
+                user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
+                users.append(UserResponse(**user_data))
 
-                # Convert to schemas
-                items = []
-                for user_dict in user_dicts:
-                    user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                    items.append(UserResponse(**user_data))
-
-                return PaginatedResponse[UserResponse].create(
-                    items=items,
-                    total=total,
-                    page=pagination.page,
-                    page_size=pagination.page_size
-                )
-            else:
-                user_dicts = self.user_repo.get_all(include_deleted=include_deleted)
-
-                users = []
-                for user_dict in user_dicts:
-                    user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                    users.append(UserResponse(**user_data))
-
-                return users
+            return users
 
         except Exception as e:
             logger.error(f"Error getting all users: {e}")
@@ -530,63 +500,6 @@ class UserRoleService:
             raise
 
 
-class UserPasswordService:
-    """
-    User password service - handles password management.
-    Single Responsibility: Password change operations.
-    """
-
-    def __init__(self, user_repository: UserRepository, password_service: PasswordService):
-        """Initialize with dependencies."""
-        self.user_repo = user_repository
-        self.password_service = password_service
-
-    def change_password(self, user_id: int, password_data: UserPasswordUpdate) -> bool:
-        """
-        Change user password.
-
-        Args:
-            user_id: User ID
-            password_data: Password update data
-
-        Returns:
-            True if successful
-
-        Raises:
-            ValueError: If current password is incorrect
-        """
-        try:
-            # Get current user with password hash
-            user_dict = self.user_repo.get_by_id(user_id)
-
-            if not user_dict:
-                raise ValueError("User not found")
-
-            # Verify current password
-            if not self.password_service.verify_password(
-                password_data.current_password,
-                user_dict['password_hash']
-            ):
-                raise ValueError("Current password is incorrect")
-
-            # Hash new password
-            new_hash = self.password_service.hash_password(password_data.new_password)
-
-            # Update password via repository
-            success = self.user_repo.change_password(user_id, new_hash)
-
-            if success:
-                logger.info(f"Password changed for user ID: {user_id}")
-
-            return success
-
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.error(f"Error changing password for user {user_id}: {e}")
-            raise
-
-
 class UserService:
     """
     Composite User Service - Facade pattern for all user operations.
@@ -602,25 +515,21 @@ class UserService:
     a single, unified interface for the controller layer.
     """
 
-    def __init__(self, user_repository: UserRepository, password_service: PasswordService):
+    def __init__(self, user_repository: UserRepository):
         """
         Initialize composite user service.
 
         Args:
             user_repository: User repository for data access
-            password_service: Password hashing service
         """
         # Initialize specialized services
-        self._crud = UserCrudService(user_repository, password_service)
+        self._crud = UserCrudService(user_repository)
         self._search = UserSearchService(user_repository)
         self._lookup = UserLookupService(user_repository)
         self._roles = UserRoleService(user_repository)
-        self._password = UserPasswordService(user_repository, password_service)
 
         # Keep references for backward compatibility
         self.user_repo = user_repository
-        self.password_service = password_service
-
     # === CRUD Operations (delegate to UserCrudService) ===
     def create_user(self, user_data: UserCreate) -> UserResponse:
         return self._crud.create_user(user_data)
@@ -650,10 +559,12 @@ class UserService:
 
     def get_all_users(
         self,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = None,
+        role: Optional[str] = None,
         include_deleted: bool = False,
-        pagination: Optional[PaginationParams] = None
-    ) -> List[UserResponse] | PaginatedResponse:
-        return self._search.get_all_users(include_deleted, pagination)
+    ) -> List[UserResponse]:
+        return self._search.get_all_users(cursor, limit, role, include_deleted)
 
     # === Lookup Operations (delegate to UserLookupService) ===
     def get_by_email(self, email: str) -> Optional[UserResponse]:

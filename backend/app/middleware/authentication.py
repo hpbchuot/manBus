@@ -42,8 +42,8 @@ def token_required(f):
         # Step 3: Check if token is blacklisted (using factory)
         try:
             from app.main import factory
-            blacklist_service = factory.get_blacklist_service()
-            if blacklist_service.is_blacklisted(token):
+            token_service = factory.get_token_service()
+            if token_service.is_blacklisted(token):
                 return jsonify({
                     'message': 'Token blacklisted. Please log in again.',
                     'status': 'fail'
@@ -60,7 +60,7 @@ def token_required(f):
         try:
             from app.main import factory
             user_repo = factory.get_user_repository()
-            current_user = user_repo.get_by_public_id(payload['uuid'])
+            current_user = user_repo.get_by_id(payload['user_id'])
 
             if not current_user:
                 return jsonify({
@@ -105,7 +105,7 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated(current_user, *args, **kwargs):
-        if not current_user.get('admin', False):
+        if current_user.get('role') != 'Admin':
             return jsonify({
                 'message': 'Admin privileges required',
                 'status': 'fail'

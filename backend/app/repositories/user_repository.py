@@ -236,23 +236,25 @@ class UserSearchRepository:
 
     def get_all(
         self,
-        include_deleted: bool = False,
+        cursor: Optional[int] = None,
         limit: Optional[int] = None,
-        offset: int = 0
+        role: Optional[str] = None,
+        include_deleted: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Get all users using fn_get_all_users function.
 
         Args:
+            cursor: Optional cursor for pagination (user ID)
+            limit: Max results (default 20, max 100)
+            role: Optional role filter
             include_deleted: Include soft-deleted users
-            limit: Max results
-            offset: Offset for pagination
 
         Returns:
             List of RealDictRow with user data
         """
-        query = 'SELECT * FROM fn_get_all_users(%s, %s, %s)'
-        results = self._db.fetch_all(query, (include_deleted, limit, offset))
+        query = 'SELECT * FROM fn_get_all_users(%s, %s, %s::roles, %s)'
+        results = self._db.fetch_all(query, (cursor, limit, role, include_deleted))
         return [dict(row) for row in results] if results else []
 
     def count(
@@ -473,11 +475,12 @@ class UserRepository:
 
     def get_all(
         self,
-        include_deleted: bool = False,
+        cursor: Optional[int] = None,
         limit: Optional[int] = None,
-        offset: int = 0
+        role: Optional[str] = None,
+        include_deleted: bool = False
     ) -> List[Dict[str, Any]]:
-        return self._search.get_all(include_deleted, limit, offset)
+        return self._search.get_all(cursor, limit, role, include_deleted)
 
     def count(
         self,

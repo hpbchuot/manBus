@@ -549,3 +549,82 @@ $$ LANGUAGE plpgsql STABLE;
 
 -- Get user count:
 -- SELECT fn_get_user_count();
+
+-- ============================================================================
+-- GET ALL USERS (ADMIN ONLY - CURSOR-BASED PAGINATION)
+-- ============================================================================
+
+-- Function: fn_get_all_users
+-- Description: Returns all users with cursor-based pagination (admin only)
+--              Includes soft-deleted users for admin oversight
+-- Parameters:
+--   p_cursor: Cursor for pagination (user ID, NULL for first page)
+--   p_limit: Number of records per page (default 20, max 100)
+--   p_role_filter: Optional role filter (NULL for all roles)
+--   p_include_deleted: Include soft-deleted users (default TRUE for admin)
+-- Returns: TABLE with user information only (no pagination metadata in rows)
+-- Usage:
+--   -- First page:
+--   SELECT * FROM fn_get_all_users(NULL, 20, NULL, TRUE);
+--   -- Next page (using last user ID as cursor):
+--   SELECT * FROM fn_get_all_users(20, 20, NULL, TRUE);
+--   -- Filter by role:
+--   SELECT * FROM fn_get_all_users(NULL, 20, 'Driver', TRUE);
+DROP FUNCTION IF EXISTS fn_get_all_users;
+CREATE OR REPLACE FUNCTION fn_get_all_users(
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 20,
+    p_role_filter roles DEFAULT NULL,
+    p_include_deleted BOOLEAN DEFAULT TRUE
+)
+RETURNS TABLE (
+    id INT,
+    name VARCHAR(100),
+    phone VARCHAR(11),
+    email VARCHAR(255),
+    username VARCHAR(50),
+    public_id VARCHAR(100),
+    role roles,
+    registered_on TIMESTAMP,
+    is_deleted BOOLEAN,
+    deleted_at TIMESTAMP,
+    updated_at TIMESTAMP
+) AS $$
+DECLARE
+    v_limit INT;
+BEGIN
+    -- Validate and cap limit
+    IF p_limit IS NULL OR p_limit <= 0 THEN
+        v_limit := 20;
+    ELSIF p_limit > 100 THEN
+        v_limit := 100;
+    ELSE
+        v_limit := p_limit;
+    END IF;
+
+    -- Return user records with cursor-based pagination
+    RETURN QUERY
+    SELECT
+        u.id,
+        u.name,
+        u.phone,
+        u.email,
+        u.username,
+        u.public_id,
+        u.role,
+        u.registered_on,
+        u.is_deleted,
+        u.deleted_at,
+        u.updated_at
+    FROM Users u
+    WHERE
+        -- Cursor-based pagination
+        (p_cursor IS NULL OR u.id > p_cursor)
+        -- Role filter
+        AND (p_role_filter IS NULL OR u.role = p_role_filter)
+        -- Deleted filter
+        AND (p_include_deleted = TRUE OR u.is_deleted = FALSE)
+    ORDER BY u.id ASC
+    LIMIT v_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;

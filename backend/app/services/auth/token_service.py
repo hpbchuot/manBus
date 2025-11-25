@@ -39,7 +39,7 @@ class TokenService:
         user_id: int,
         username: str,
         public_id: str,
-        admin: bool = False,
+        role: str = 'User',
         expires_in: int = 3600
     ) -> str:
         """
@@ -66,7 +66,7 @@ class TokenService:
                 'user_id': user_id,
                 'username': username,
                 'public_id': public_id,
-                'admin': admin,
+                'role': role,
                 'exp': exp_timestamp,
                 'iat': iat_timestamp
             }
@@ -109,7 +109,7 @@ class TokenService:
                 user_id=payload.get('user_id'),
                 username=payload.get('username'),
                 public_id=payload.get('public_id'),
-                admin=payload.get('admin', False),
+                role=payload.get('role', 'User'),
                 exp=payload.get('exp')
             )
 
@@ -247,7 +247,7 @@ class TokenService:
                 user_id=token_data.user_id,
                 username=token_data.username or '',
                 public_id=token_data.public_id or '',
-                admin=token_data.admin,
+                role=token_data.role,
                 expires_in=expires_in
             )
 
@@ -282,18 +282,18 @@ class TokenService:
             True if admin, False otherwise
         """
         token_data = self.validate_token(token)
-        return token_data.admin if token_data else False
+        return token_data.role == 'Admin'
 
 
 # Backward compatibility - standalone functions
-def generate_token(user_id: int, username: str, public_id: str, admin: bool = False) -> str:
+def generate_token(user_id: int, username: str, public_id: str, role: str = 'User') -> str:
     """Generate token (backward compatible)"""
     from app.config.database import Database
     from app.repositories.auth_repository import AuthRepository
     db = Database()
     auth_repo = AuthRepository(db)
     service = TokenService(auth_repo)
-    return service.generate_token(user_id, username, public_id, admin)
+    return service.generate_token(user_id, username, public_id, role)
 
 
 def validate_token(token: str) -> Optional[Dict[str, Any]]:
@@ -309,6 +309,6 @@ def validate_token(token: str) -> Optional[Dict[str, Any]]:
             'user_id': token_data.user_id,
             'username': token_data.username,
             'public_id': token_data.public_id,
-            'admin': token_data.admin
+            'role': token_data.role
         }
     return None

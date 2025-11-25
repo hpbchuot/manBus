@@ -106,44 +106,58 @@ def get_user(user_id):
 @user_api.route('/', methods=['GET'])
 @token_required
 @admin_required
-def get_all_users():
-    """Get all users with optional pagination"""
+def get_all_users(current_user):
+    """
+    Get all users with cursor-based pagination.
+
+    Query Parameters:
+        - cursor: int (optional) - User ID from last result for pagination
+        - limit: int (optional) - Number of results (default 20, max 100)
+        - role: str (optional) - Filter by role (User, Driver, Admin)
+        - include_deleted: bool (optional) - Include soft-deleted users
+
+    Returns:
+        200: List of users
+        401: Unauthorized
+        403: Forbidden (non-admin)
+        500: Internal server error
+    """
     try:
         user_service = get_user_service()
 
-        # Get pagination params from query string
-        page = request.args.get('page', type=int)
-        page_size = request.args.get('page_size', type=int)
+        # Get query parameters
+        cursor = request.args.get('cursor', type=int)
+        limit = request.args.get('limit', type=int, default=20)
+        role = request.args.get('role', type=str)
         include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
 
-        pagination = None
-        if page and page_size:
-            pagination = PaginationParams(page=page, page_size=page_size)
-
-        result = user_service.get_all_users(
-            include_deleted=include_deleted,
-            pagination=pagination
+        # Get users with cursor-based pagination
+        users = user_service.get_all_users(
+            cursor=cursor,
+            limit=limit,
+            role=role,
+            include_deleted=include_deleted
         )
 
-        # Handle paginated vs non-paginated response
-        if pagination:
-            return jsonify({
-                'status': 'success',
-                'data': result.model_dump()
-            }), 200
-        else:
-            return jsonify({
-                'status': 'success',
-                'data': [user.model_dump() for user in result]
-            }), 200
+        # Convert to dict for JSON response
+        users_data = [user.model_dump() for user in users]
+
+        # Calculate next cursor (last user's ID if results exist)
+        next_cursor = users_data[-1]['id'] if users_data else None
+        has_more = len(users_data) == limit  # If we got exactly limit, there might be more
+
+        return ErrorResponse.success(
+            data={
+                'users': users_data,
+                'has_more': has_more,
+                'next_cursor': next_cursor,
+                'count': len(users_data)
+            }
+        )
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'status': 'error',
-            'message': f'Failed to get users: {str(e)}'
-        }), 500
+        logger.error(f"Failed to get users: {str(e)}", exc_info=True)
+        return ErrorResponse.error(f'Failed to get users: {str(e)}')
 
 
 @user_api.route('/by/<int:user_id>', methods=['PUT'])

@@ -152,7 +152,7 @@ class UserResponse(BaseSchema):
     email: str
     username: Optional[str] = None
     public_id: Optional[str] = None
-    admin: bool
+    role: str
     updated_at: Optional[datetime] = None
 
 
