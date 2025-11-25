@@ -7,7 +7,6 @@ from typing import Optional, Dict, Any
 
 from app.repositories.user_repository import UserRepository
 from app.repositories.auth_repository import AuthRepository
-from app.services.auth.password_service import PasswordService
 from app.services.auth.token_service import TokenService
 from app.schemas.user_schemas import UserRegister, UserLogin, UserLoginResponse, UserResponse
 from app.schemas.auth_schemas import TokenResponse
@@ -27,7 +26,6 @@ class AuthService(IAuthService):
         self,
         user_repository: UserRepository,
         auth_repository: AuthRepository,
-        password_service: PasswordService,
         token_service: TokenService
     ):
         """
@@ -36,12 +34,10 @@ class AuthService(IAuthService):
         Args:
             user_repository: User repository for user data access
             auth_repository: Auth repository for blacklist operations
-            password_service: Password hashing service
             token_service: Token generation/validation service
         """
         self.user_repo = user_repository
         self.auth_repo = auth_repository
-        self.password_service = password_service
         self.token_service = token_service
 
     def register(self, user_data: UserRegister | dict) -> UserLoginResponse | dict:
@@ -97,7 +93,7 @@ class AuthService(IAuthService):
                 user_id=user_dict['id'],
                 username=user_dict['username'],
                 public_id=user_dict['public_id'],
-                admin=user_dict['admin']
+                role=user_dict['role']
             )
 
             # Return appropriate format based on input type
@@ -140,7 +136,7 @@ class AuthService(IAuthService):
                 user_id=user_dict['id'],
                 username=user_dict['username'],
                 public_id=user_dict['public_id'],
-                admin=user_dict['admin']
+                role=user_dict['role']
             )
 
             return user_dict, token

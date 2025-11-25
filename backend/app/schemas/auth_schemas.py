@@ -13,7 +13,7 @@ class TokenData(BaseSchema):
     user_id: int = Field(..., description="User ID")
     username: Optional[str] = Field(None, description="Username")
     public_id: Optional[str] = Field(None, description="User public ID")
-    admin: bool = Field(default=False, description="Admin status")
+    role: str = Field(default=False, description="Admin status")
     exp: Optional[int] = Field(None, description="Token expiration timestamp")
 
 

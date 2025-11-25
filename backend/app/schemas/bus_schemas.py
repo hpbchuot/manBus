@@ -83,7 +83,7 @@ class BusResponse(BaseSchema):
     name: Optional[str] = None
     model: Optional[str] = None
     status: str
-    route_id: int
+    route_id: Optional[int] = None
     current_location: Optional[PointSchema] = None
 
 

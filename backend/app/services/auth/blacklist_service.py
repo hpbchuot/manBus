@@ -1,6 +1,6 @@
 from app.core.interfaces.services.blacklist_service_interface import IBlacklistService
 
-class BlacklistService(IBlacklistService):
+class BlacklistService:
     """Token blacklist service using database functions"""
 
     def __init__(self, db_executor):

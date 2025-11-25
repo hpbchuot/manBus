@@ -9,7 +9,6 @@ from .user_repository import UserRepository
 from .bus_repository import BusRepository
 from .driver_repository import DriverRepository
 from .route_repository import RouteRepository, StopRepository
-from .feedback_repository import FeedbackRepository
 
 __all__ = [
     'BaseRepository',
@@ -18,6 +17,5 @@ __all__ = [
     'BusRepository',
     'DriverRepository',
     'RouteRepository',
-    'StopRepository',
-    'FeedbackRepository',
+    'StopRepository'
 ]

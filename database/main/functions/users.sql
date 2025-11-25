@@ -516,36 +516,153 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
--- EXAMPLES AND TESTING
+-- GET ALL USERS (ADMIN ONLY - CURSOR-BASED PAGINATION)
 -- ============================================================================
 
--- Example usage:
--- Create a new user:
--- SELECT fn_create_user('John Doe', '08412345678', 'john@example.com', 'johndoe', 'password123', FALSE);
+-- Function: fn_get_all_users
+-- Description: Returns all users with cursor-based pagination (admin only)
+--              Includes soft-deleted users for admin oversight
+-- Parameters:
+--   p_cursor: Cursor for pagination (user ID, NULL for first page)
+--   p_limit: Number of records per page (default 20, max 100)
+--   p_role_filter: Optional role filter (NULL for all roles)
+--   p_include_deleted: Include soft-deleted users (default TRUE for admin)
+-- Returns: TABLE with user information only (no pagination metadata in rows)
+-- Usage:
+--   -- First page:
+--   SELECT * FROM fn_get_all_users(NULL, 20, NULL, TRUE);
+--   -- Next page (using last user ID as cursor):
+--   SELECT * FROM fn_get_all_users(20, 20, NULL, TRUE);
+--   -- Filter by role:
+--   SELECT * FROM fn_get_all_users(NULL, 20, 'Driver', TRUE);
+DROP FUNCTION IF EXISTS fn_get_all_users;
+CREATE OR REPLACE FUNCTION fn_get_all_users(
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 20,
+    p_role_filter roles DEFAULT NULL,
+    p_include_deleted BOOLEAN DEFAULT TRUE
+)
+RETURNS TABLE (
+    id INT,
+    name VARCHAR(100),
+    phone VARCHAR(11),
+    email VARCHAR(255),
+    username VARCHAR(50),
+    public_id VARCHAR(100),
+    role roles,
+    registered_on TIMESTAMP,
+    is_deleted BOOLEAN,
+    deleted_at TIMESTAMP,
+    updated_at TIMESTAMP
+) AS $$
+DECLARE
+    v_limit INT;
+BEGIN
+    -- Validate and cap limit
+    IF p_limit IS NULL OR p_limit <= 0 THEN
+        v_limit := 20;
+    ELSIF p_limit > 100 THEN
+        v_limit := 100;
+    ELSE
+        v_limit := p_limit;
+    END IF;
 
--- Verify user password:
--- SELECT fn_verify_user_password('john@example.com', 'password123');
+    -- Return user records with cursor-based pagination
+    RETURN QUERY
+    SELECT
+        u.id,
+        u.name,
+        u.phone,
+        u.email,
+        u.username,
+        u.public_id,
+        u.role,
+        u.registered_on,
+        u.is_deleted,
+        u.deleted_at,
+        u.updated_at
+    FROM Users u
+    WHERE
+        -- Cursor-based pagination
+        (p_cursor IS NULL OR u.id > p_cursor)
+        -- Role filter
+        AND (p_role_filter IS NULL OR u.role = p_role_filter)
+        -- Deleted filter
+        AND (p_include_deleted = TRUE OR u.is_deleted = FALSE)
+    ORDER BY u.id ASC
+    LIMIT v_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;
 
--- Update user profile:
--- SELECT fn_update_user_profile(1, 'Jane Doe', NULL, 'jane@example.com', NULL);
 
--- Change password:
--- SELECT fn_change_user_password(1, 'newpassword123');
+-- ===========================================================================
+-- fn_get_user_by_email
+-- ===========================================================================
+-- Function: fn_get_user_by_email
+-- Description: Retrieves a user by their email address
+-- Parameters:
+--   p_email: User's email address
+-- Returns: TABLE with user information
+-- Usage: SELECT * FROM fn_get_user_by_email('user@example.com');
+DROP FUNCTION IF EXISTS fn_get_user_by_email;
+CREATE OR REPLACE FUNCTION fn_get_user_by_email(p_email VARCHAR(255))
+RETURNS TABLE (
+    id INT,
+    name VARCHAR(100),
+    phone VARCHAR(11),
+    email VARCHAR(255),
+    username VARCHAR(50),
+    public_id VARCHAR(100),
+    role roles
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        users.id,
+        users.name,
+        users.phone,
+        users.email,
+        users.username,
+        users.public_id,
+        users.role
+    FROM users
+    WHERE LOWER(users.email) = LOWER(p_email)
+        AND users.is_deleted = FALSE;
+END;
+$$ LANGUAGE plpgsql STABLE;
 
--- Soft delete user:
--- SELECT fn_soft_delete_user(1);
-
--- Restore user:
--- SELECT fn_restore_user(1);
-
--- Get all active users:
--- SELECT * FROM fn_get_active_users();
-
--- Search users:
--- SELECT * FROM fn_search_users('john');
-
--- Get user by public ID:
--- SELECT * FROM fn_get_user_by_public_id('abc123...');
-
--- Get user count:
--- SELECT fn_get_user_count();
+-- ===========================================================================
+-- fn_get_user_by_username
+-- ===========================================================================
+-- Function: fn_get_user_by_username
+-- Description: Retrieves a user by their username
+-- Parameters:
+--   p_username: User's username
+-- Returns: TABLE with user information
+-- Usage: SELECT * FROM fn_get_user_by_username('johndoe');
+DROP FUNCTION IF EXISTS fn_get_user_by_username;
+CREATE OR REPLACE FUNCTION fn_get_user_by_username(p_username VARCHAR(50))
+RETURNS TABLE (
+    id INT,
+    name VARCHAR(100),
+    phone VARCHAR(11),
+    email VARCHAR(255),
+    username VARCHAR(50),
+    public_id VARCHAR(100),
+    role roles
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        users.id,
+        users.name,
+        users.phone,
+        users.email,
+        users.username,
+        users.public_id,
+        users.role
+    FROM users
+    WHERE LOWER(users.username) = LOWER(p_username)
+        AND users.is_deleted = FALSE;
+END;
+$$ LANGUAGE plpgsql STABLE;
