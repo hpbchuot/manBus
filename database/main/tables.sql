@@ -10,15 +10,6 @@ CREATE TABLE BlacklistTokens (
     blacklisted_on TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Predefined roles
-DROP TABLE IF EXISTS Roles CASCADE;
-CREATE TABLE Roles (
-    role_id SERIAL PRIMARY KEY,
-    role_name VARCHAR(100) UNIQUE NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
 -- Users table
 DROP TABLE IF EXISTS Users CASCADE;
 CREATE TABLE Users (
@@ -27,22 +18,13 @@ CREATE TABLE Users (
     phone VARCHAR(11) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     registered_on TIMESTAMP NOT NULL DEFAULT NOW(),
-    admin BOOLEAN NOT NULL DEFAULT FALSE,
+    role roles NOT NULL DEFAULT 'User',
     public_id VARCHAR(100) UNIQUE,
     username VARCHAR(50) UNIQUE,
     password_hash VARCHAR(100),
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP
-);
-
--- Many-to-many relationship between users and roles
-DROP TABLE IF EXISTS UserRoles CASCADE;
-CREATE TABLE UserRoles (
-    user_id INT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
-    role_id INT NOT NULL REFERENCES Roles(role_id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP DEFAULT NOW(),
-    PRIMARY KEY (user_id, role_id)
 );
 
 -- Routes table
@@ -80,7 +62,7 @@ CREATE TABLE Buses (
     plate_number VARCHAR(20) UNIQUE NOT NULL,
     name VARCHAR(100),
     model VARCHAR(50),
-    status VARCHAR(20) DEFAULT 'Active',
+    status bus_status DEFAULT 'Active',
     route_id INT NOT NULL REFERENCES Routes(id),
     current_location GEOMETRY(POINT, 4326),
     FOREIGN KEY (route_id) REFERENCES Routes(id) ON DELETE RESTRICT
@@ -105,31 +87,7 @@ CREATE TABLE Drivers (
     license_number VARCHAR(100) UNIQUE NOT NULL,
     bus_id INT NOT NULL REFERENCES Buses(bus_id),
     user_id INT NOT NULL UNIQUE REFERENCES Users(id) ON DELETE CASCADE,
-    status VARCHAR(10) NOT NULL DEFAULT 'Active',
+    status driver_status NOT NULL DEFAULT 'Active',
     FOREIGN KEY (bus_id) REFERENCES Buses(bus_id) ON DELETE RESTRICT,
     FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-);
-
--- Notifications table (linked to users)
-DROP TABLE IF EXISTS Notifications CASCADE;
-CREATE TABLE Notifications (
-    id SERIAL PRIMARY KEY,
-    message VARCHAR(255) NOT NULL,
-    read BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    type VARCHAR(50),
-    link VARCHAR(255),
-    user_id INT REFERENCES Users(id) ON DELETE CASCADE
-);
-
--- Feedback table
-DROP TABLE IF EXISTS Feedback CASCADE;
-CREATE TABLE Feedback (
-    id SERIAL PRIMARY KEY,
-    status VARCHAR(20) NOT NULL DEFAULT 'Pending',
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    bus_id INT NOT NULL REFERENCES Buses(bus_id) ON DELETE CASCADE,
-    user_id INT NOT NULL REFERENCES Users(id) ON DELETE CASCADE
 );

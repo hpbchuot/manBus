@@ -24,7 +24,7 @@ CREATE OR REPLACE FUNCTION fn_create_bus(
     p_name VARCHAR(100),
     p_route_id INT,
     p_model VARCHAR(50) DEFAULT NULL,
-    p_status VARCHAR(20) DEFAULT 'Active'
+    p_status bus_status DEFAULT 'Active'
 )
 RETURNS INT AS $$
 DECLARE
@@ -40,11 +40,6 @@ BEGIN
     SELECT EXISTS(SELECT 1 FROM Routes WHERE id = p_route_id) INTO route_exists;
     IF NOT route_exists THEN
         RAISE EXCEPTION 'Route with ID % does not exist', p_route_id;
-    END IF;
-
-    -- Validate status
-    IF p_status NOT IN ('Active', 'Inactive', 'Maintenance', 'Retired') THEN
-        RAISE EXCEPTION 'Invalid status. Must be one of: Active, Inactive, Maintenance, Retired';
     END IF;
 
     -- Insert bus
@@ -115,22 +110,18 @@ $$ LANGUAGE plpgsql;
 -- Description: Updates bus status with validation
 -- Parameters:
 --   p_bus_id: Bus ID
---   p_new_status: New status
+--   p_new_status: New status (Active, Inactive, Maintenance)
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_update_bus_status(1, 'Maintenance');
+DROP FUNCTION IF EXISTS fn_update_bus_status;
 CREATE OR REPLACE FUNCTION fn_update_bus_status(
     p_bus_id INT,
-    p_new_status VARCHAR(20)
+    p_new_status bus_status
 )
 RETURNS BOOLEAN AS $$
 DECLARE
     bus_exists BOOLEAN;
 BEGIN
-    -- Validate status
-    IF p_new_status NOT IN ('Active', 'Inactive', 'Maintenance', 'Retired') THEN
-        RAISE EXCEPTION 'Invalid status. Must be one of: Active, Inactive, Maintenance, Retired';
-    END IF;
-
     -- Check if bus exists
     SELECT EXISTS(SELECT 1 FROM Buses WHERE bus_id = p_bus_id) INTO bus_exists;
     IF NOT bus_exists THEN
@@ -158,6 +149,7 @@ $$ LANGUAGE plpgsql;
 --   p_route_id: New route ID
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_assign_bus_to_route(1, 2);
+DROP FUNCTION IF EXISTS fn_assign_bus_to_route;
 CREATE OR REPLACE FUNCTION fn_assign_bus_to_route(
     p_bus_id INT,
     p_route_id INT
@@ -199,13 +191,14 @@ $$ LANGUAGE plpgsql;
 --   p_route_id: Route ID
 -- Returns: TABLE with bus information
 -- Usage: SELECT * FROM fn_get_buses_on_route(1);
+DROP FUNCTION IF EXISTS fn_get_buses_on_route;
 CREATE OR REPLACE FUNCTION fn_get_buses_on_route(p_route_id INT)
 RETURNS TABLE (
     bus_id INT,
     plate_number VARCHAR(20),
     name VARCHAR(100),
     model VARCHAR(50),
-    status VARCHAR(20),
+    status bus_status,
     current_latitude DOUBLE PRECISION,
     current_longitude DOUBLE PRECISION
 ) AS $$
@@ -238,6 +231,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_limit: Maximum number of results (default 5)
 -- Returns: TABLE with bus information and distance
 -- Usage: SELECT * FROM fn_find_nearest_bus(10.8231, 106.6297, NULL, 5);
+DROP FUNCTION IF EXISTS fn_find_nearest_bus;
 CREATE OR REPLACE FUNCTION fn_find_nearest_bus(
     p_lat DOUBLE PRECISION,
     p_lon DOUBLE PRECISION,
@@ -250,7 +244,7 @@ RETURNS TABLE (
     name VARCHAR(100),
     route_id INT,
     route_name VARCHAR(100),
-    status VARCHAR(20),
+    status bus_status,
     distance_meters DOUBLE PRECISION,
     current_latitude DOUBLE PRECISION,
     current_longitude DOUBLE PRECISION
@@ -292,6 +286,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_tolerance_meters: Distance tolerance in meters (default 100)
 -- Returns: BOOLEAN - TRUE if on route
 -- Usage: SELECT fn_is_bus_on_route(1, 100);
+DROP FUNCTION IF EXISTS fn_is_bus_on_route;
 CREATE OR REPLACE FUNCTION fn_is_bus_on_route(
     p_bus_id INT,
     p_tolerance_meters INT DEFAULT 100
@@ -342,13 +337,14 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_include_inactive: Include inactive/maintenance/retired buses (default FALSE)
 -- Returns: TABLE with bus information
 -- Usage: SELECT * FROM fn_get_all_buses(FALSE);
+DROP FUNCTION IF EXISTS fn_get_all_buses;
 CREATE OR REPLACE FUNCTION fn_get_all_buses(p_include_inactive BOOLEAN DEFAULT FALSE)
 RETURNS TABLE (
     bus_id INT,
     plate_number VARCHAR(20),
     name VARCHAR(100),
     model VARCHAR(50),
-    status VARCHAR(20),
+    status bus_status,
     route_id INT,
     route_name VARCHAR(100),
     current_latitude DOUBLE PRECISION,
@@ -383,13 +379,14 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_plate_number: Plate number to search
 -- Returns: TABLE with bus information
 -- Usage: SELECT * FROM fn_get_bus_by_plate('29A-12345');
+DROP FUNCTION IF EXISTS fn_get_bus_by_plate;
 CREATE OR REPLACE FUNCTION fn_get_bus_by_plate(p_plate_number VARCHAR(20))
 RETURNS TABLE (
     bus_id INT,
     plate_number VARCHAR(20),
     name VARCHAR(100),
     model VARCHAR(50),
-    status VARCHAR(20),
+    status bus_status,
     route_id INT,
     route_name VARCHAR(100),
     current_latitude DOUBLE PRECISION,
@@ -423,6 +420,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_bus_id: Bus ID
 -- Returns: TABLE with location details
 -- Usage: SELECT * FROM fn_get_bus_location_details(1);
+DROP FUNCTION IF EXISTS fn_get_bus_location_details;
 CREATE OR REPLACE FUNCTION fn_get_bus_location_details(p_bus_id INT)
 RETURNS TABLE (
     bus_id INT,
@@ -485,6 +483,7 @@ $$ LANGUAGE plpgsql STABLE;
 -- Description: Returns count of active buses
 -- Returns: INT - Number of active buses
 -- Usage: SELECT fn_get_active_buses_count();
+DROP FUNCTION IF EXISTS fn_get_active_buses_count;
 CREATE OR REPLACE FUNCTION fn_get_active_buses_count()
 RETURNS INT AS $$
 DECLARE
