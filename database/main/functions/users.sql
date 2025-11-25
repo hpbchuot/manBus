@@ -17,16 +17,17 @@
 --   p_email: Email address
 --   p_username: Username (optional)
 --   p_password: Plain text password to be hashed
---   p_admin: Admin flag (default FALSE)
+--   p_role: User role (default 'User')
 -- Returns: INT - New user ID
--- Usage: SELECT fn_create_user('John Doe', '08412345678', 'john@example.com', 'johndoe', 'password123', FALSE);
+-- Usage: SELECT fn_create_user('John Doe', '08412345678', 'john@example.com', 'johndoe', 'password123', 'User');
+DROP FUNCTION IF EXISTS fn_create_user;
 CREATE OR REPLACE FUNCTION fn_create_user(
     p_name VARCHAR(100),
     p_phone VARCHAR(11),
     p_email VARCHAR(255),
     p_username VARCHAR(50) DEFAULT NULL,
     p_password TEXT DEFAULT NULL,
-    p_admin BOOLEAN DEFAULT FALSE
+    p_role roles DEFAULT 'User'
 )
 RETURNS INT AS $$
 DECLARE
@@ -68,7 +69,7 @@ BEGIN
         email,
         username,
         password_hash,
-        admin,
+        role,
         public_id,
         registered_on,
         is_deleted
@@ -78,7 +79,7 @@ BEGIN
         LOWER(TRIM(p_email)),
         LOWER(TRIM(p_username)),
         v_password_hash,
-        p_admin,
+        p_role,
         v_public_id,
         NOW(),
         FALSE
@@ -104,6 +105,7 @@ $$ LANGUAGE plpgsql;
 --   p_password: Plain text password to verify
 -- Returns: INT - User ID if successful, NULL if failed
 -- Usage: SELECT fn_verify_user_password('john@example.com', 'password123');
+DROP FUNCTION IF EXISTS fn_verify_user_password;
 CREATE OR REPLACE FUNCTION fn_verify_user_password(
     p_email TEXT,
     p_password TEXT
@@ -153,6 +155,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_username: New username (NULL to keep current)
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_update_user_profile(1, 'Jane Doe', NULL, NULL, NULL);
+DROP FUNCTION IF EXISTS fn_update_user_profile;
 CREATE OR REPLACE FUNCTION fn_update_user_profile(
     p_user_id INT,
     p_name VARCHAR(100) DEFAULT NULL,
@@ -212,6 +215,7 @@ $$ LANGUAGE plpgsql;
 --   p_new_password: New plain text password
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_change_user_password(1, 'newpassword123');
+DROP FUNCTION IF EXISTS fn_change_user_password;
 CREATE OR REPLACE FUNCTION fn_change_user_password(
     p_user_id INT,
     p_new_password TEXT
@@ -259,6 +263,7 @@ $$ LANGUAGE plpgsql;
 --   p_user_id: User ID to delete
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_soft_delete_user(1);
+DROP FUNCTION IF EXISTS fn_soft_delete_user;
 CREATE OR REPLACE FUNCTION fn_soft_delete_user(p_user_id INT)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -303,6 +308,7 @@ $$ LANGUAGE plpgsql;
 --   p_user_id: User ID to restore
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_restore_user(1);
+DROP FUNCTION IF EXISTS fn_restore_user;
 CREATE OR REPLACE FUNCTION fn_restore_user(p_user_id INT)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -339,6 +345,7 @@ $$ LANGUAGE plpgsql;
 -- Description: Returns all active (non-deleted) users
 -- Returns: TABLE with user information
 -- Usage: SELECT * FROM fn_get_active_users();
+DROP FUNCTION IF EXISTS fn_get_active_users;
 CREATE OR REPLACE FUNCTION fn_get_active_users()
 RETURNS TABLE (
     id INT,
@@ -346,7 +353,7 @@ RETURNS TABLE (
     phone VARCHAR(11),
     email VARCHAR(255),
     username VARCHAR(50),
-    admin BOOLEAN,
+    role roles,
     registered_on TIMESTAMP
 ) AS $$
 BEGIN
@@ -357,7 +364,7 @@ BEGIN
         u.phone,
         u.email,
         u.username,
-        u.admin,
+        u.role,
         u.registered_on
     FROM Users u
     WHERE u.is_deleted = FALSE
@@ -375,6 +382,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   search_term: Search string (case-insensitive)
 -- Returns: TABLE with matching user information
 -- Usage: SELECT * FROM fn_search_users('john');
+DROP FUNCTION IF EXISTS fn_search_users;
 CREATE OR REPLACE FUNCTION fn_search_users(search_term TEXT)
 RETURNS TABLE (
     id INT,
@@ -382,7 +390,7 @@ RETURNS TABLE (
     phone VARCHAR(11),
     email VARCHAR(255),
     username VARCHAR(50),
-    admin BOOLEAN,
+    role roles,
     registered_on TIMESTAMP
 ) AS $$
 BEGIN
@@ -397,7 +405,7 @@ BEGIN
         u.phone,
         u.email,
         u.username,
-        u.admin,
+        u.role,
         u.registered_on
     FROM Users u
     WHERE u.is_deleted = FALSE
@@ -421,6 +429,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_public_id: User's public ID
 -- Returns: TABLE with user information
 -- Usage: SELECT * FROM fn_get_user_by_public_id('abc123...');
+DROP FUNCTION IF EXISTS fn_get_user_by_public_id;
 CREATE OR REPLACE FUNCTION fn_get_user_by_public_id(p_public_id VARCHAR(100))
 RETURNS TABLE (
     id INT,
@@ -428,7 +437,7 @@ RETURNS TABLE (
     phone VARCHAR(11),
     email VARCHAR(255),
     username VARCHAR(50),
-    admin BOOLEAN,
+    role roles,
     registered_on TIMESTAMP
 ) AS $$
 BEGIN
@@ -439,7 +448,7 @@ BEGIN
         u.phone,
         u.email,
         u.username,
-        u.admin,
+        u.role,
         u.registered_on
     FROM Users u
     WHERE u.public_id = p_public_id
@@ -456,7 +465,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_user_id: User's internal ID
 -- Returns: TABLE with user information
 -- Usage: SELECT fn_get_user_by_id(1);
-
+DROP FUNCTION IF EXISTS fn_get_user_by_id;
 CREATE OR REPLACE FUNCTION fn_get_user_by_id(p_user_id INT)
 RETURNS TABLE (
     id INT,
@@ -465,7 +474,7 @@ RETURNS TABLE (
     email VARCHAR(255),
     username VARCHAR(50),
     public_id VARCHAR(100),
-    admin BOOLEAN
+    role roles
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -476,7 +485,7 @@ BEGIN
         users.email,
         users.username,
         users.public_id,
-        users.admin
+        users.role
     FROM users
     WHERE users.id = p_user_id;
 END;
@@ -491,6 +500,7 @@ $$ LANGUAGE plpgsql;
 -- Description: Returns count of active users
 -- Returns: INT - Number of active users
 -- Usage: SELECT fn_get_user_count();
+DROP FUNCTION IF EXISTS fn_get_user_count;
 CREATE OR REPLACE FUNCTION fn_get_user_count()
 RETURNS INT AS $$
 DECLARE

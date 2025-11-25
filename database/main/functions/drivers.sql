@@ -17,6 +17,7 @@
 --   p_bus_id: Bus to assign to driver
 -- Returns: INT - New driver ID
 -- Usage: SELECT fn_create_driver(1, 'DL123456789', 1);
+DROP FUNCTION IF EXISTS fn_create_driver;
 CREATE OR REPLACE FUNCTION fn_create_driver(
     p_user_id INT,
     p_license_number VARCHAR(100),
@@ -95,6 +96,7 @@ $$ LANGUAGE plpgsql;
 --   p_bus_id: New bus ID to assign
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_assign_bus_to_driver(1, 2);
+DROP FUNCTION IF EXISTS fn_assign_bus_to_driver;
 CREATE OR REPLACE FUNCTION fn_assign_bus_to_driver(
     p_driver_id INT,
     p_bus_id INT
@@ -153,22 +155,18 @@ $$ LANGUAGE plpgsql;
 -- Description: Updates driver status
 -- Parameters:
 --   p_driver_id: Driver ID
---   p_new_status: New status (Active, Inactive, Suspended)
+--   p_new_status: New status (Active, Inactive, On Leave)
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_set_driver_status(1, 'Inactive');
+DROP FUNCTION IF EXISTS fn_set_driver_status;
 CREATE OR REPLACE FUNCTION fn_set_driver_status(
     p_driver_id INT,
-    p_new_status VARCHAR(10)
+    p_new_status driver_status
 )
 RETURNS BOOLEAN AS $$
 DECLARE
     driver_exists BOOLEAN;
 BEGIN
-    -- Validate status
-    IF p_new_status NOT IN ('Active', 'Inactive', 'Suspended') THEN
-        RAISE EXCEPTION 'Invalid status. Must be one of: Active, Inactive, Suspended';
-    END IF;
-
     -- Check if driver exists
     SELECT EXISTS(
         SELECT 1 FROM Drivers WHERE id = p_driver_id
@@ -198,11 +196,12 @@ $$ LANGUAGE plpgsql;
 --   p_user_id: User ID
 -- Returns: TABLE with driver information
 -- Usage: SELECT * FROM fn_get_driver_by_user(1);
+DROP FUNCTION IF EXISTS fn_get_driver_by_user;
 CREATE OR REPLACE FUNCTION fn_get_driver_by_user(p_user_id INT)
 RETURNS TABLE (
     driver_id INT,
     license_number VARCHAR(100),
-    status VARCHAR(10),
+    status driver_status,
     bus_id INT,
     bus_name VARCHAR(100),
     bus_plate_number VARCHAR(20),
@@ -235,6 +234,7 @@ $$ LANGUAGE plpgsql STABLE;
 -- Description: Returns all active drivers with their assignments
 -- Returns: TABLE with driver information
 -- Usage: SELECT * FROM fn_get_active_drivers();
+DROP FUNCTION IF EXISTS fn_get_active_drivers;
 CREATE OR REPLACE FUNCTION fn_get_active_drivers()
 RETURNS TABLE (
     driver_id INT,
@@ -242,7 +242,7 @@ RETURNS TABLE (
     driver_email VARCHAR(255),
     driver_phone VARCHAR(11),
     license_number VARCHAR(100),
-    status VARCHAR(10),
+    status driver_status,
     bus_id INT,
     bus_name VARCHAR(100),
     bus_plate_number VARCHAR(20),
@@ -283,6 +283,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_include_deleted_users: Include drivers whose users are deleted (default FALSE)
 -- Returns: TABLE with driver information
 -- Usage: SELECT * FROM fn_get_all_drivers(FALSE);
+DROP FUNCTION IF EXISTS fn_get_all_drivers;
 CREATE OR REPLACE FUNCTION fn_get_all_drivers(p_include_deleted_users BOOLEAN DEFAULT FALSE)
 RETURNS TABLE (
     driver_id INT,
@@ -290,7 +291,7 @@ RETURNS TABLE (
     driver_email VARCHAR(255),
     driver_phone VARCHAR(11),
     license_number VARCHAR(100),
-    status VARCHAR(10),
+    status driver_status,
     bus_id INT,
     bus_name VARCHAR(100),
     bus_plate_number VARCHAR(20),
@@ -330,6 +331,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_bus_id: Bus ID
 -- Returns: TABLE with driver information
 -- Usage: SELECT * FROM fn_get_driver_by_bus(1);
+DROP FUNCTION IF EXISTS fn_get_driver_by_bus;
 CREATE OR REPLACE FUNCTION fn_get_driver_by_bus(p_bus_id INT)
 RETURNS TABLE (
     driver_id INT,
@@ -337,7 +339,7 @@ RETURNS TABLE (
     driver_email VARCHAR(255),
     driver_phone VARCHAR(11),
     license_number VARCHAR(100),
-    status VARCHAR(10),
+    status driver_status,
     user_id INT
 ) AS $$
 BEGIN
@@ -368,6 +370,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_route_id: Route ID
 -- Returns: TABLE with driver information
 -- Usage: SELECT * FROM fn_get_drivers_on_route(1);
+DROP FUNCTION IF EXISTS fn_get_drivers_on_route;
 CREATE OR REPLACE FUNCTION fn_get_drivers_on_route(p_route_id INT)
 RETURNS TABLE (
     driver_id INT,
@@ -375,11 +378,11 @@ RETURNS TABLE (
     driver_email VARCHAR(255),
     driver_phone VARCHAR(11),
     license_number VARCHAR(100),
-    driver_status VARCHAR(10),
+    driver_status driver_status,
     bus_id INT,
     bus_name VARCHAR(100),
     bus_plate_number VARCHAR(20),
-    bus_status VARCHAR(20)
+    bus_status bus_status
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -414,6 +417,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_new_license: New license number
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_update_driver_license(1, 'DL987654321');
+DROP FUNCTION IF EXISTS fn_update_driver_license;
 CREATE OR REPLACE FUNCTION fn_update_driver_license(
     p_driver_id INT,
     p_new_license VARCHAR(100)
@@ -459,6 +463,7 @@ $$ LANGUAGE plpgsql;
 --   p_user_id: User ID to check
 -- Returns: BOOLEAN - TRUE if user is a driver
 -- Usage: SELECT fn_is_user_driver(1);
+DROP FUNCTION IF EXISTS fn_is_user_driver;
 CREATE OR REPLACE FUNCTION fn_is_user_driver(p_user_id INT)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -482,7 +487,8 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_status: Status filter (NULL for all)
 -- Returns: INT - Number of drivers
 -- Usage: SELECT fn_get_driver_count('Active');
-CREATE OR REPLACE FUNCTION fn_get_driver_count(p_status VARCHAR(10) DEFAULT NULL)
+DROP FUNCTION IF EXISTS fn_get_driver_count;
+CREATE OR REPLACE FUNCTION fn_get_driver_count(p_status driver_status DEFAULT NULL)
 RETURNS INT AS $$
 DECLARE
     driver_count INT;

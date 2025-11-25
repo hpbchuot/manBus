@@ -2,7 +2,7 @@
 -- AUTH.SQL - Authentication and Authorization Functions
 -- ============================================================================
 -- Description: Functions for JWT token blacklisting and role-based access control
--- Dependencies: BlacklistTokens, Roles, UserRoles tables
+-- Dependencies: BlacklistTokens, Users tables
 -- ============================================================================
 
 -- ============================================================================
@@ -15,6 +15,7 @@
 --   token_value: JWT token string to blacklist
 -- Returns: BOOLEAN - TRUE if successful (idempotent)
 -- Usage: SELECT fn_blacklist_token('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
+DROP FUNCTION IF EXISTS fn_blacklist_token;
 CREATE OR REPLACE FUNCTION fn_blacklist_token(token_value TEXT)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -42,6 +43,7 @@ $$ LANGUAGE plpgsql;
 --   token_value: JWT token string to check
 -- Returns: BOOLEAN - TRUE if blacklisted, FALSE otherwise
 -- Usage: SELECT fn_is_token_blacklisted('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
+DROP FUNCTION IF EXISTS fn_is_token_blacklisted;
 CREATE OR REPLACE FUNCTION fn_is_token_blacklisted(token_value TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -71,6 +73,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   days_old: Number of days after which tokens should be removed
 -- Returns: INT - Number of tokens deleted
 -- Usage: SELECT fn_cleanup_old_tokens(30); -- Remove tokens older than 30 days
+DROP FUNCTION IF EXISTS fn_cleanup_old_tokens;
 CREATE OR REPLACE FUNCTION fn_cleanup_old_tokens(days_old INT DEFAULT 30)
 RETURNS INT AS $$
 DECLARE
@@ -98,166 +101,128 @@ $$ LANGUAGE plpgsql;
 -- Description: Checks if a user has a specific role
 -- Parameters:
 --   p_user_id: User ID to check
---   role_name: Name of the role to check for
+--   p_role_name: Name of the role to check for ('Admin', 'Driver', 'User')
 -- Returns: BOOLEAN - TRUE if user has the role, FALSE otherwise
--- Usage: SELECT fn_user_has_role(1, 'admin');
-CREATE OR REPLACE FUNCTION fn_user_has_role(p_user_id INT, role_name TEXT)
+-- Usage: SELECT fn_user_has_role(1, 'Admin');
+DROP FUNCTION IF EXISTS fn_user_has_role;
+CREATE OR REPLACE FUNCTION fn_user_has_role(p_user_id INT, p_role_name roles)
 RETURNS BOOLEAN AS $$
 DECLARE
-    has_role BOOLEAN;
+    user_role roles;
 BEGIN
-    IF p_user_id IS NULL OR role_name IS NULL THEN
+    IF p_user_id IS NULL OR p_role_name IS NULL THEN
         RETURN FALSE;
     END IF;
 
-    SELECT EXISTS(
-        SELECT 1
-        FROM UserRoles ur
-        INNER JOIN Roles r ON ur.role_id = r.role_id
-        INNER JOIN Users u ON ur.user_id = u.id
-        WHERE ur.user_id = p_user_id
-            AND r.role_name = role_name
-            AND u.is_deleted = FALSE
-    ) INTO has_role;
+    SELECT role INTO user_role
+    FROM Users
+    WHERE id = p_user_id
+        AND is_deleted = FALSE;
 
-    RETURN has_role;
+    RETURN user_role = p_role_name;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
--- ROLE ASSIGNMENT
+-- ROLE MANAGEMENT
 -- ============================================================================
 
--- Function: fn_assign_role
--- Description: Assigns a role to a user
+-- Function: fn_set_user_role
+-- Description: Sets a user's role
 -- Parameters:
---   p_user_id: User ID to assign role to
---   role_name: Name of the role to assign
--- Returns: BOOLEAN - TRUE if successful, FALSE if role already assigned
--- Usage: SELECT fn_assign_role(1, 'driver');
-CREATE OR REPLACE FUNCTION fn_assign_role(p_user_id INT, role_name TEXT)
+--   p_user_id: User ID to update
+--   p_role_name: New role ('Admin', 'Driver', 'User')
+-- Returns: BOOLEAN - TRUE if successful
+-- Usage: SELECT fn_set_user_role(1, 'Driver');
+DROP FUNCTION IF EXISTS fn_set_user_role;
+CREATE OR REPLACE FUNCTION fn_set_user_role(p_user_id INT, p_role_name roles)
 RETURNS BOOLEAN AS $$
 DECLARE
-    v_role_id INT;
     user_exists BOOLEAN;
+    current_role roles;
 BEGIN
     -- Validate inputs
-    IF p_user_id IS NULL OR role_name IS NULL THEN
+    IF p_user_id IS NULL OR p_role_name IS NULL THEN
         RAISE EXCEPTION 'User ID and role name cannot be NULL';
     END IF;
 
     -- Check if user exists and is not deleted
     SELECT EXISTS(
         SELECT 1 FROM Users WHERE id = p_user_id AND is_deleted = FALSE
-    ) INTO user_exists;
+    ), role INTO user_exists, current_role
+    FROM Users
+    WHERE id = p_user_id AND is_deleted = FALSE;
 
     IF NOT user_exists THEN
         RAISE EXCEPTION 'User with ID % does not exist or is deleted', p_user_id;
     END IF;
 
-    -- Get role ID
-    SELECT role_id INTO v_role_id
-    FROM Roles
-    WHERE Roles.role_name = fn_assign_role.role_name;
-
-    IF v_role_id IS NULL THEN
-        RAISE EXCEPTION 'Role "%" does not exist', role_name;
-    END IF;
-
     -- Check if user already has this role
-    IF fn_user_has_role(p_user_id, role_name) THEN
-        RAISE NOTICE 'User % already has role "%"', p_user_id, role_name;
+    IF current_role = p_role_name THEN
+        RAISE NOTICE 'User % already has role "%"', p_user_id, p_role_name;
         RETURN FALSE;
     END IF;
 
-    -- Assign role
-    INSERT INTO UserRoles (user_id, role_id, assigned_at)
-    VALUES (p_user_id, v_role_id, NOW());
+    -- Update role
+    UPDATE Users
+    SET role = p_role_name,
+        updated_at = NOW()
+    WHERE id = p_user_id;
 
-    RAISE NOTICE 'Role "%" assigned to user %', role_name, p_user_id;
+    RAISE NOTICE 'Role "%" assigned to user %', p_role_name, p_user_id;
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- ROLE REVOCATION
--- ============================================================================
-
--- Function: fn_revoke_role
--- Description: Removes a role from a user
+-- Function: fn_get_user_role
+-- Description: Gets a user's role
 -- Parameters:
---   p_user_id: User ID to revoke role from
---   role_name: Name of the role to revoke
--- Returns: BOOLEAN - TRUE if successful, FALSE if user didn't have the role
--- Usage: SELECT fn_revoke_role(1, 'driver');
-CREATE OR REPLACE FUNCTION fn_revoke_role(p_user_id INT, role_name TEXT)
-RETURNS BOOLEAN AS $$
+--   p_user_id: User ID
+-- Returns: roles - User's role
+-- Usage: SELECT fn_get_user_role(1);
+DROP FUNCTION IF EXISTS fn_get_user_role;
+CREATE OR REPLACE FUNCTION fn_get_user_role(p_user_id INT)
+RETURNS roles AS $$
 DECLARE
-    v_role_id INT;
-    deleted_count INT;
-BEGIN
-    -- Validate inputs
-    IF p_user_id IS NULL OR role_name IS NULL THEN
-        RAISE EXCEPTION 'User ID and role name cannot be NULL';
-    END IF;
-
-    -- Get role ID
-    SELECT role_id INTO v_role_id
-    FROM Roles
-    WHERE Roles.role_name = fn_revoke_role.role_name;
-
-    IF v_role_id IS NULL THEN
-        RAISE EXCEPTION 'Role "%" does not exist', role_name;
-    END IF;
-
-    -- Remove role
-    DELETE FROM UserRoles
-    WHERE user_id = p_user_id AND role_id = v_role_id;
-
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
-
-    IF deleted_count = 0 THEN
-        RAISE NOTICE 'User % did not have role "%"', p_user_id, role_name;
-        RETURN FALSE;
-    END IF;
-
-    RAISE NOTICE 'Role "%" revoked from user %', role_name, p_user_id;
-    RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql;
-
--- ============================================================================
--- GET USER ROLES
--- ============================================================================
-
--- Function: fn_get_user_roles
--- Description: Returns all roles assigned to a user
--- Parameters:
---   p_user_id: User ID to get roles for
--- Returns: TABLE with role information
--- Usage: SELECT * FROM fn_get_user_roles(1);
-CREATE OR REPLACE FUNCTION fn_get_user_roles(p_user_id INT)
-RETURNS TABLE (
-    role_id INT,
-    role_name VARCHAR(100),
-    description TEXT,
-    assigned_at TIMESTAMP
-) AS $$
+    user_role roles;
 BEGIN
     IF p_user_id IS NULL THEN
-        RAISE EXCEPTION 'User ID cannot be NULL';
+        RETURN NULL;
     END IF;
 
-    RETURN QUERY
-    SELECT
-        r.role_id,
-        r.role_name,
-        r.description,
-        ur.assigned_at
-    FROM UserRoles ur
-    INNER JOIN Roles r ON ur.role_id = r.role_id
-    WHERE ur.user_id = p_user_id
-    ORDER BY ur.assigned_at DESC;
+    SELECT role INTO user_role
+    FROM Users
+    WHERE id = p_user_id
+        AND is_deleted = FALSE;
+
+    RETURN user_role;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Function: fn_is_admin
+-- Description: Checks if a user is an admin
+-- Parameters:
+--   p_user_id: User ID to check
+-- Returns: BOOLEAN - TRUE if user is admin
+-- Usage: SELECT fn_is_admin(1);
+DROP FUNCTION IF EXISTS fn_is_admin;
+CREATE OR REPLACE FUNCTION fn_is_admin(p_user_id INT)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN fn_user_has_role(p_user_id, 'Admin');
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Function: fn_is_driver
+-- Description: Checks if a user is a driver
+-- Parameters:
+--   p_user_id: User ID to check
+-- Returns: BOOLEAN - TRUE if user is a driver
+-- Usage: SELECT fn_is_driver(1);
+CREATE OR REPLACE FUNCTION fn_is_driver(p_user_id INT)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN fn_user_has_role(p_user_id, 'Driver');
 END;
 $$ LANGUAGE plpgsql STABLE;
 
@@ -268,19 +233,21 @@ $$ LANGUAGE plpgsql STABLE;
 -- Function: fn_get_users_by_role
 -- Description: Returns all users with a specific role
 -- Parameters:
---   role_name: Name of the role
+--   p_role_name: Role to filter by ('Admin', 'Driver', 'User')
 -- Returns: TABLE with user information
--- Usage: SELECT * FROM fn_get_users_by_role('driver');
-CREATE OR REPLACE FUNCTION fn_get_users_by_role(role_name TEXT)
+-- Usage: SELECT * FROM fn_get_users_by_role('Driver');
+DROP FUNCTION IF EXISTS fn_get_users_by_role;
+CREATE OR REPLACE FUNCTION fn_get_users_by_role(p_role_name roles)
 RETURNS TABLE (
     user_id INT,
     name VARCHAR(100),
     email VARCHAR(255),
     username VARCHAR(50),
-    assigned_at TIMESTAMP
+    phone VARCHAR(11),
+    registered_on TIMESTAMP
 ) AS $$
 BEGIN
-    IF role_name IS NULL THEN
+    IF p_role_name IS NULL THEN
         RAISE EXCEPTION 'Role name cannot be NULL';
     END IF;
 
@@ -290,13 +257,12 @@ BEGIN
         u.name,
         u.email,
         u.username,
-        ur.assigned_at
+        u.phone,
+        u.registered_on
     FROM Users u
-    INNER JOIN UserRoles ur ON u.id = ur.user_id
-    INNER JOIN Roles r ON ur.role_id = r.role_id
-    WHERE r.role_name = fn_get_users_by_role.role_name
+    WHERE u.role = p_role_name
         AND u.is_deleted = FALSE
-    ORDER BY ur.assigned_at DESC;
+    ORDER BY u.registered_on DESC;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
@@ -315,16 +281,19 @@ $$ LANGUAGE plpgsql STABLE;
 -- SELECT fn_cleanup_old_tokens(30);
 
 -- Check if user has role:
--- SELECT fn_user_has_role(1, 'admin');
+-- SELECT fn_user_has_role(1, 'Admin');
 
--- Assign role to user:
--- SELECT fn_assign_role(1, 'driver');
+-- Set user role:
+-- SELECT fn_set_user_role(1, 'Driver');
 
--- Revoke role from user:
--- SELECT fn_revoke_role(1, 'driver');
+-- Get user role:
+-- SELECT fn_get_user_role(1);
 
--- Get all roles for a user:
--- SELECT * FROM fn_get_user_roles(1);
+-- Check if user is admin:
+-- SELECT fn_is_admin(1);
+
+-- Check if user is driver:
+-- SELECT fn_is_driver(1);
 
 -- Get all users with a specific role:
--- SELECT * FROM fn_get_users_by_role('driver');
+-- SELECT * FROM fn_get_users_by_role('Driver');
