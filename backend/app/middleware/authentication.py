@@ -68,18 +68,8 @@ def token_required(f):
                     'status': 'fail'
                 }), 401
 
-            # Convert to dict if needed
-            if hasattr(current_user, 'model_dump'):
-                current_user = current_user.model_dump()
-            elif isinstance(current_user, list) and len(current_user) > 0:
-                current_user = dict(current_user[0])
-            elif not isinstance(current_user, dict):
-                current_user = dict(current_user)
-
         except Exception as e:
             logger.error(f"User retrieval error: {e}")
-            import traceback
-            traceback.print_exc()
             return jsonify({
                 'message': 'Authentication failed',
                 'status': 'fail'
@@ -114,36 +104,4 @@ def admin_required(f):
         return f(current_user, *args, **kwargs)
 
     return decorated
-
-
-def role_required(required_role):
-    """
-    Decorator for routes that require a specific role level.
-    Must be used in combination with @token_required.
-
-    Args:
-        required_role: Minimum role level required (integer)
-
-    Usage:
-        @app.route('/manager')
-        @token_required
-        @role_required(2)
-        def manager_route(current_user):
-            return jsonify({'message': 'Manager access granted'})
-    """
-    def decorator(f):
-        @wraps(f)
-        def decorated(current_user, *args, **kwargs):
-            user_role = current_user.get('role', 1)
-
-            if user_role < required_role:
-                return jsonify({
-                    'message': f'Role level {required_role} or higher required',
-                    'status': 'fail'
-                }), 403
-
-            return f(current_user, *args, **kwargs)
-
-        return decorated
-    return decorator
 

@@ -187,6 +187,4 @@ class UserWithRoles(UserResponse):
 
 class UserSearchParams(BaseSchema):
     """Schema for user search parameters"""
-    query: Optional[str] = Field(None, description="Search query (name, email, username)")
-    admin_only: Optional[bool] = Field(None, description="Filter admin users only")
-    include_deleted: bool = Field(default=False, description="Include soft-deleted users")
+    query: str = Field(None, description="Search query (name, email, username)")

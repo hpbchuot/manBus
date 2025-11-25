@@ -62,7 +62,7 @@ class UserCoreRepository(BaseRepository):
             RealDictRow with updated user data or None
         """
         query = '''
-            SELECT * FROM fn_update_user(%s, %s, %s, %s, %s)
+            SELECT * FROM fn_update_user_profile(%s, %s, %s, %s, %s)
         '''
         params = (
             user_id,
@@ -211,27 +211,19 @@ class UserSearchRepository:
 
     def search(
         self,
-        query: Optional[str] = None,
-        admin_only: Optional[bool] = None,
-        include_deleted: bool = False,
-        limit: Optional[int] = None,
-        offset: int = 0
+        query: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Search users using fn_search_users function.
 
         Args:
             query: Search term for name, email, username
-            admin_only: Filter admin users only
-            include_deleted: Include soft-deleted users
-            limit: Max results
-            offset: Offset for pagination
 
         Returns:
             List of RealDictRow with user data
         """
-        sql = 'SELECT * FROM fn_search_users(%s, %s, %s, %s, %s)'
-        results = self._db.fetch_all(sql, (query, admin_only, include_deleted, limit, offset))
+        sql = 'SELECT * FROM fn_search_users(%s)'
+        results = self._db.fetch_all(sql, (query,))
         return [dict(row) for row in results] if results else []
 
     def get_all(
@@ -288,20 +280,6 @@ class UserRoleRepository:
     def __init__(self, db_executor):
         """Initialize with database executor."""
         self._db = db_executor
-
-    def get_with_roles(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Get user with roles using fn_get_user_with_roles function.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            RealDictRow with user data and roles array or None
-        """
-        query = 'SELECT * FROM fn_get_user_with_roles(%s)'
-        result = self._db.fetch_one(query, (user_id,))
-        return dict(result) if result else None
 
     def assign_role(self, user_id: int, role_id: int) -> bool:
         """
@@ -438,7 +416,7 @@ class UserRepository:
         return self._core.get_by_id(user_id)
 
     def soft_delete(self, user_id: int) -> Optional[Dict[str, Any]]:
-        return self._core.soft_delete(user_id)
+        return self._core.delete(user_id)
 
     def restore(self, user_id: int) -> Optional[Dict[str, Any]]:
         return self._core.restore(user_id)
@@ -465,13 +443,9 @@ class UserRepository:
     # === Search Operations (delegate to UserSearchRepository) ===
     def search(
         self,
-        query: Optional[str] = None,
-        admin_only: Optional[bool] = None,
-        include_deleted: bool = False,
-        limit: Optional[int] = None,
-        offset: int = 0
+        query: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        return self._search.search(query, admin_only, include_deleted, limit, offset)
+        return self._search.search(query)
 
     def get_all(
         self,
@@ -491,9 +465,6 @@ class UserRepository:
         return self._search.count(query, admin_only, include_deleted)
 
     # === Role Operations (delegate to UserRoleRepository) ===
-    def get_with_roles(self, user_id: int) -> Optional[Dict[str, Any]]:
-        return self._roles.get_with_roles(user_id)
-
     def assign_role(self, user_id: int, role_id: int) -> bool:
         return self._roles.assign_role(user_id, role_id)
 
