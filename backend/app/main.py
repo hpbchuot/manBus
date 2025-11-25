@@ -7,7 +7,6 @@ from app.controllers.user_controller import user_api
 from app.controllers.bus_controller import bus_api
 from app.controllers.driver_controller import driver_api
 from app.controllers.route_controller import route_api, stop_api
-from app.controllers.feedback_controller import feedback_api
 import logging
 
 from app.services.factory import ServiceFactory
@@ -75,7 +74,6 @@ app.register_blueprint(bus_api, url_prefix='/api/buses')
 app.register_blueprint(driver_api, url_prefix='/api/drivers')
 app.register_blueprint(route_api, url_prefix='/api/routes')
 app.register_blueprint(stop_api, url_prefix='/api/stops')
-app.register_blueprint(feedback_api, url_prefix='/api/feedback')
 
 logger.info("All API blueprints registered successfully")
 

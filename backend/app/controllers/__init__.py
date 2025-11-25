@@ -9,7 +9,6 @@ from app.controllers.user_controller import user_api
 from app.controllers.bus_controller import bus_api
 from app.controllers.driver_controller import driver_api
 from app.controllers.route_controller import route_api, stop_api
-from app.controllers.feedback_controller import feedback_api
 
 __all__ = [
     'auth_api',
@@ -17,6 +16,5 @@ __all__ = [
     'bus_api',
     'driver_api',
     'route_api',
-    'stop_api',
-    'feedback_api',
+    'stop_api'
 ]
