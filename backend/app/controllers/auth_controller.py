@@ -1,6 +1,6 @@
-from flask import request, jsonify, g, make_response
+from flask import request, jsonify, g, make_response, Blueprint
+auth_api = Blueprint('auth_api', __name__)
 from pydantic import ValidationError
-from . import auth_api
 from app.middleware.cookie_handler import CookieManager
 from app.middleware.error_handlers import ErrorResponse
 import logging
