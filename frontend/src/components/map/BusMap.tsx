@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, ZoomControl, useMap } from 'react-leaflet';
-import { Box, useTheme } from '@mui/material';
-import { MAP_CONFIG } from '../../../config/mapConfig';
+import { Box } from '@mui/material';
+import { MAP_CONFIG } from '@/config/mapConfig';
 import L from 'leaflet';
 
 // Fix lỗi icon mặc định của Leaflet khi dùng với Webpack/Rsbuild
@@ -20,12 +20,12 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // Component này không render gì cả, chỉ lắng nghe thay đổi kích thước để báo cho Map vẽ lại
 const MapReSizer = () => {
   const map = useMap();
-  
+
   useEffect(() => {
     // ResizeObserver giúp theo dõi thay đổi kích thước của thẻ chứa Map
     const resizeObserver = new ResizeObserver(() => {
       // Gọi invalidateSize để Leaflet tính toán lại khung nhìn
-      map.invalidateSize(); 
+      map.invalidateSize();
     });
 
     const mapContainer = map.getContainer();
@@ -41,8 +41,6 @@ const MapReSizer = () => {
 
 // --- Main Component ---
 const BusMap: React.FC = () => {
-  const theme = useTheme();
-
   return (
     <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
       <MapContainer

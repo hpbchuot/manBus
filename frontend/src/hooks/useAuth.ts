@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from './store';
-import { login as loginAction, logout as logoutAction, clearError } from '@/features/auth/authSlice';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { login as loginAction, logout as logoutAction, clearError } from '@/store/slices/authSlice';
 import type { LoginPayload } from '@/types/auth';
 import { toast } from 'react-toastify';
 

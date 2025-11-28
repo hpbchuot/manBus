@@ -1,4 +1,4 @@
-import type { LoginResponseDTO, User } from './types';
+import type { LoginResponseDTO, User } from '@/types/auth';
 
 // Interface quy định hành vi convert
 export interface IAuthAdapter {
@@ -9,7 +9,7 @@ export class AuthAdapter implements IAuthAdapter {
   // Chuyển đổi từ DTO (Backend) sang Domain Model (Frontend)
   toUser(dto: LoginResponseDTO): User {
     const rawUser = dto.user_info;
-    
+
     return {
       id: rawUser.id,
       username: rawUser.user_name, // Mapping: user_name -> username
