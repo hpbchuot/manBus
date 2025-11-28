@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Dialog, DialogTitle, DialogContent, DialogActions, 
-  TextField, Button, Alert, LinearProgress 
+import {
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Button, Alert, LinearProgress
 } from '@mui/material';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { login, clearError } from '../authSlice';
+import { login, clearError } from '@/store/slices/authSlice';
 import { toast } from 'react-toastify';
 
 interface LoginDialogProps {
@@ -43,10 +43,10 @@ const Login: React.FC<LoginDialogProps> = ({ open, onClose }) => {
       <DialogTitle sx={{ textAlign: 'center', fontWeight: 'bold', color: 'primary.main' }}>
         ĐĂNG NHẬP HỆ THỐNG
       </DialogTitle>
-      
+
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        
+
         <TextField
           autoFocus
           margin="dense"
@@ -68,12 +68,12 @@ const Login: React.FC<LoginDialogProps> = ({ open, onClose }) => {
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
         />
       </DialogContent>
-      
+
       <DialogActions sx={{ p: 2, justifyContent: 'center' }}>
         <Button onClick={handleClose} color="inherit">Hủy</Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
           disabled={isLoading}
           sx={{ minWidth: 120 }}
         >

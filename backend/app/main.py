@@ -79,7 +79,7 @@ logger.info("All API blueprints registered successfully")
 
 if __name__ == '__main__':
     try:
-        app.run(debug=True, host='0.0.0.0', port=5001)
+        app.run(debug=True, host='0.0.0.0', port=5000)
     except KeyboardInterrupt:
         logger.info("Application shutting down...")
         db.close_all_connections()

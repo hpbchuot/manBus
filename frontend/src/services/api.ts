@@ -5,9 +5,6 @@ import axios, {
   type AxiosResponse 
 } from 'axios';
 
-import { IHttpClient } from '@/types/http';
-import { storage } from '@/services/storage';
-
 const BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:8000/api';
 
 const api: AxiosInstance = axios.create({
@@ -45,4 +42,12 @@ api.interceptors.response.use(
   }
 );
 
+// Generic API Response wrapper
+export interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  status?: string;
+}
+
+export { storage } from './storage';
 export default api;
