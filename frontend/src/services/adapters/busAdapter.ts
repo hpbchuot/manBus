@@ -7,6 +7,7 @@ import type {
   NearestBusDTO,
   BusStatus,
 } from '@/types/bus';
+import { parseWKBPoint } from '@/utils/wkbParser';
 
 export interface IBusAdapter {
   toBus(dto: BusDTO): Bus;
@@ -25,10 +26,7 @@ export class BusAdapter implements IBusAdapter {
       routeId: dto.route_id,
       routeName: dto.route_name,
       currentLocation: dto.current_location
-        ? {
-            latitude: dto.current_location.latitude,
-            longitude: dto.current_location.longitude,
-          }
+        ? parseWKBPoint(dto.current_location)
         : undefined,
       lastUpdated: dto.last_updated,
     };
@@ -37,10 +35,7 @@ export class BusAdapter implements IBusAdapter {
   toBusLocationDetails(dto: BusLocationDetailsDTO): BusLocationDetails {
     return {
       busId: dto.bus_id,
-      currentLocation: {
-        latitude: dto.current_location.latitude,
-        longitude: dto.current_location.longitude,
-      },
+      currentLocation: parseWKBPoint(dto.current_location),
       distanceFromRoute: dto.distance_from_route,
       lastUpdated: dto.last_updated,
     };
@@ -51,10 +46,7 @@ export class BusAdapter implements IBusAdapter {
       busId: dto.bus_id,
       plateNumber: dto.plate_number,
       distanceMeters: dto.distance_meters,
-      currentLocation: {
-        latitude: dto.current_location.latitude,
-        longitude: dto.current_location.longitude,
-      },
+      currentLocation: parseWKBPoint(dto.current_location),
     };
   }
 }

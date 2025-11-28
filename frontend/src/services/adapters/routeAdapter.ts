@@ -6,6 +6,7 @@ import type {
   RouteGeoJSON,
   RouteGeoJSONDTO,
 } from '@/types/route';
+import { parseWKBPoint } from '@/utils/wkbParser';
 
 export interface IRouteAdapter {
   toRoute(dto: RouteDTO): Route;
@@ -30,10 +31,7 @@ export class RouteAdapter implements IRouteAdapter {
       stopId: dto.stop_id,
       name: dto.name,
       sequence: dto.sequence,
-      location: {
-        latitude: dto.location.latitude,
-        longitude: dto.location.longitude,
-      },
+      location: parseWKBPoint(dto.location),
     };
   }
 

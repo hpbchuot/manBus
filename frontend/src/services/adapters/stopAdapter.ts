@@ -1,4 +1,5 @@
 import type { Stop, StopDTO, NearestStop, NearestStopDTO } from '@/types/stop';
+import { parseWKBPoint } from '@/utils/wkbParser';
 
 export interface IStopAdapter {
   toStop(dto: StopDTO): Stop;
@@ -10,10 +11,7 @@ export class StopAdapter implements IStopAdapter {
     return {
       id: dto.id,
       name: dto.name,
-      location: {
-        latitude: dto.location.latitude,
-        longitude: dto.location.longitude,
-      },
+      location: parseWKBPoint(dto.location),
     };
   }
 
@@ -22,10 +20,7 @@ export class StopAdapter implements IStopAdapter {
       id: dto.id,
       name: dto.name,
       distanceMeters: dto.distance_meters,
-      location: {
-        latitude: dto.location.latitude,
-        longitude: dto.location.longitude,
-      },
+      location: parseWKBPoint(dto.location),
     };
   }
 }

@@ -18,7 +18,7 @@ export interface NearestStop extends Stop {
 export interface StopDTO {
   id: number;
   name: string;
-  location: {
+  location: string | {
     latitude: number;
     longitude: number;
   };
@@ -28,7 +28,7 @@ export interface NearestStopDTO {
   id: number;
   name: string;
   distance_meters: number;
-  location: {
+  location: string | {
     latitude: number;
     longitude: number;
   };
