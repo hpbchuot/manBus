@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { store } from './store';
 import { Provider } from 'react-redux';
 import App from './App';
+import './styles/map.css';
 
 const rootEl = document.getElementById('root');
 if (rootEl) {
