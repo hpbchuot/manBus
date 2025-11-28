@@ -65,6 +65,9 @@ CREATE TABLE Buses (
     status bus_status DEFAULT 'Active',
     route_id INT NOT NULL REFERENCES Routes(id),
     current_location GEOMETRY(POINT, 4326),
+    route_progress DOUBLE PRECISION DEFAULT 0.0,
+    direction INT DEFAULT 1,
+    last_updated TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (route_id) REFERENCES Routes(id) ON DELETE RESTRICT
 );
 

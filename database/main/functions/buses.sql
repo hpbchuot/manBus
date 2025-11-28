@@ -499,6 +499,247 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
+-- INITIALIZE BUS POSITIONS
+-- ============================================================================
+
+-- Function: fn_initialize_bus_positions
+-- Description: Initializes positions for buses without current_location or route_progress
+-- Returns: INT - Count of buses initialized
+-- Usage: SELECT fn_initialize_bus_positions();
+DROP FUNCTION IF EXISTS fn_initialize_bus_positions;
+CREATE OR REPLACE FUNCTION fn_initialize_bus_positions()
+RETURNS INT AS $$
+DECLARE
+    v_bus RECORD;
+    v_first_stop_location GEOMETRY;
+    v_route_geom GEOMETRY;
+    v_progress DOUBLE PRECISION;
+    initialized_count INT := 0;
+BEGIN
+    -- Loop through buses that need initialization
+    FOR v_bus IN
+        SELECT bus_id, route_id
+        FROM Buses
+        WHERE current_location IS NULL OR route_progress IS NULL
+    LOOP
+        -- Get route geometry
+        SELECT route_geom INTO v_route_geom
+        FROM Routes
+        WHERE id = v_bus.route_id;
+
+        IF v_route_geom IS NULL THEN
+            RAISE NOTICE 'Bus % has route % with no geometry, skipping', v_bus.bus_id, v_bus.route_id;
+            CONTINUE;
+        END IF;
+
+        -- Get first stop on route
+        SELECT s.location INTO v_first_stop_location
+        FROM Stops s
+        INNER JOIN RouteStops rs ON s.id = rs.stop_id
+        WHERE rs.route_id = v_bus.route_id
+        ORDER BY rs.stop_sequence ASC
+        LIMIT 1;
+
+        -- If no stops, start at beginning of route
+        IF v_first_stop_location IS NULL THEN
+            v_first_stop_location := ST_StartPoint(v_route_geom);
+            v_progress := 0.0;
+        ELSE
+            -- Calculate progress along route for first stop
+            v_progress := ST_LineLocatePoint(v_route_geom, v_first_stop_location);
+        END IF;
+
+        -- Update bus with initial position
+        UPDATE Buses
+        SET current_location = v_first_stop_location,
+            route_progress = v_progress,
+            direction = 1,
+            last_updated = NOW()
+        WHERE bus_id = v_bus.bus_id;
+
+        initialized_count := initialized_count + 1;
+        RAISE NOTICE 'Initialized bus % at progress %', v_bus.bus_id, v_progress;
+    END LOOP;
+
+    RAISE NOTICE 'Initialized % buses', initialized_count;
+    RETURN initialized_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- SNAP BUS TO ROUTE
+-- ============================================================================
+
+-- Function: fn_snap_bus_to_route
+-- Description: Snaps an off-route bus back to the nearest point on its assigned route
+-- Parameters:
+--   p_bus_id: Bus ID
+-- Returns: BOOLEAN - TRUE if successful
+-- Usage: SELECT fn_snap_bus_to_route(1);
+DROP FUNCTION IF EXISTS fn_snap_bus_to_route;
+CREATE OR REPLACE FUNCTION fn_snap_bus_to_route(p_bus_id INT)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_current_location GEOMETRY;
+    v_route_geom GEOMETRY;
+    v_closest_point GEOMETRY;
+    v_progress DOUBLE PRECISION;
+BEGIN
+    -- Get bus location and route geometry
+    SELECT b.current_location, r.route_geom
+    INTO v_current_location, v_route_geom
+    FROM Buses b
+    INNER JOIN Routes r ON b.route_id = r.id
+    WHERE b.bus_id = p_bus_id;
+
+    IF v_current_location IS NULL THEN
+        RAISE EXCEPTION 'Bus % has no current location', p_bus_id;
+    END IF;
+
+    IF v_route_geom IS NULL THEN
+        RAISE EXCEPTION 'Bus % route has no geometry', p_bus_id;
+    END IF;
+
+    -- Find closest point on route
+    v_closest_point := ST_ClosestPoint(v_route_geom, v_current_location);
+
+    -- Calculate progress along route
+    v_progress := ST_LineLocatePoint(v_route_geom, v_closest_point);
+
+    -- Update bus position
+    UPDATE Buses
+    SET current_location = v_closest_point,
+        route_progress = v_progress,
+        last_updated = NOW()
+    WHERE bus_id = p_bus_id;
+
+    RAISE NOTICE 'Snapped bus % to route at progress %', p_bus_id, v_progress;
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- AUTO-UPDATE BUS POSITIONS
+-- ============================================================================
+
+-- Function: fn_update_bus_positions_auto
+-- Description: Moves all active buses along their routes by one step
+-- Parameters:
+--   p_speed_meters_per_second: Bus speed in m/s (default 10.0 = 36 km/h)
+--   p_time_step_seconds: Time elapsed since last update (default 30 seconds)
+-- Returns: TABLE with update results
+-- Usage: SELECT * FROM fn_update_bus_positions_auto(10.0, 30);
+DROP FUNCTION IF EXISTS fn_update_bus_positions_auto;
+CREATE OR REPLACE FUNCTION fn_update_bus_positions_auto(
+    p_speed_meters_per_second DOUBLE PRECISION DEFAULT 10.0,
+    p_time_step_seconds INT DEFAULT 30
+)
+RETURNS TABLE (
+    bus_id INT,
+    updated BOOLEAN,
+    new_progress DOUBLE PRECISION,
+    new_latitude DOUBLE PRECISION,
+    new_longitude DOUBLE PRECISION
+) AS $$
+DECLARE
+    v_bus RECORD;
+    v_route_length DOUBLE PRECISION;
+    v_distance_to_move DOUBLE PRECISION;
+    v_progress_delta DOUBLE PRECISION;
+    v_new_progress DOUBLE PRECISION;
+    v_new_location GEOMETRY;
+    v_new_direction INT;
+BEGIN
+    -- Calculate distance to move
+    v_distance_to_move := p_speed_meters_per_second * p_time_step_seconds;
+
+    -- Loop through all active buses
+    FOR v_bus IN
+        SELECT b.bus_id, b.route_id, b.current_location, b.route_progress,
+               b.direction, r.route_geom
+        FROM Buses b
+        INNER JOIN Routes r ON b.route_id = r.id
+        WHERE b.status = 'Active' AND r.route_geom IS NOT NULL
+    LOOP
+        BEGIN
+            -- Calculate route length in meters
+            v_route_length := ST_Length(v_bus.route_geom::geography);
+
+            -- Skip if route has no length
+            IF v_route_length = 0 OR v_route_length IS NULL THEN
+                RAISE NOTICE 'Bus % route has zero length, skipping', v_bus.bus_id;
+                CONTINUE;
+            END IF;
+
+            -- Initialize progress if NULL
+            IF v_bus.route_progress IS NULL THEN
+                IF v_bus.current_location IS NULL THEN
+                    v_bus.route_progress := 0.0;
+                    v_bus.current_location := ST_StartPoint(v_bus.route_geom);
+                ELSE
+                    v_bus.route_progress := ST_LineLocatePoint(v_bus.route_geom, v_bus.current_location);
+                END IF;
+                v_bus.direction := 1;
+            END IF;
+
+            -- Calculate progress delta (fraction of route)
+            v_progress_delta := v_distance_to_move / v_route_length;
+
+            -- Calculate new progress based on direction
+            v_new_progress := v_bus.route_progress + (v_progress_delta * v_bus.direction);
+            v_new_direction := v_bus.direction;
+
+            -- Handle route endpoints (reverse direction)
+            IF v_new_progress >= 1.0 THEN
+                v_new_progress := 2.0 - v_new_progress; -- Bounce back
+                v_new_direction := -1;
+                IF v_new_progress < 0 THEN
+                    v_new_progress := 0.01;
+                END IF;
+            ELSIF v_new_progress <= 0.0 THEN
+                v_new_progress := ABS(v_new_progress); -- Bounce back
+                v_new_direction := 1;
+                IF v_new_progress > 1.0 THEN
+                    v_new_progress := 0.99;
+                END IF;
+            END IF;
+
+            -- Clamp progress to valid range
+            v_new_progress := GREATEST(0.0, LEAST(1.0, v_new_progress));
+
+            -- Get new location point on route
+            v_new_location := ST_LineInterpolatePoint(v_bus.route_geom, v_new_progress);
+
+            -- Update bus position
+            UPDATE Buses
+            SET current_location = v_new_location,
+                route_progress = v_new_progress,
+                direction = v_new_direction,
+                last_updated = NOW()
+            WHERE Buses.bus_id = v_bus.bus_id;
+
+            -- Return result
+            bus_id := v_bus.bus_id;
+            updated := TRUE;
+            new_progress := v_new_progress;
+            new_latitude := ST_Y(v_new_location);
+            new_longitude := ST_X(v_new_location);
+            RETURN NEXT;
+
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Error updating bus %: %', v_bus.bus_id, SQLERRM;
+            bus_id := v_bus.bus_id;
+            updated := FALSE;
+            new_progress := NULL;
+            new_latitude := NULL;
+            new_longitude := NULL;
+            RETURN NEXT;
+        END;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
 -- EXAMPLES AND TESTING
 -- ============================================================================
 

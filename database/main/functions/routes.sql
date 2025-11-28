@@ -508,6 +508,165 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
+-- FIND ROUTES TO DESTINATION
+-- ============================================================================
+
+-- Function: fn_find_routes_to_destination
+-- Description: Finds routes that pass near both origin AND destination points
+-- Parameters:
+--   p_origin_lat: Origin latitude
+--   p_origin_lon: Origin longitude
+--   p_dest_lat: Destination latitude
+--   p_dest_lon: Destination longitude
+--   p_radius_meters: Search radius in meters (default 500)
+--   p_limit: Maximum number of results (default 10)
+-- Returns: TABLE with route information and distances
+-- Usage: SELECT * FROM fn_find_routes_to_destination(21.0285, 105.8542, 21.0368, 105.8347, 500, 5);
+DROP FUNCTION IF EXISTS fn_find_routes_to_destination;
+CREATE OR REPLACE FUNCTION fn_find_routes_to_destination(
+    p_origin_lat DOUBLE PRECISION,
+    p_origin_lon DOUBLE PRECISION,
+    p_dest_lat DOUBLE PRECISION,
+    p_dest_lon DOUBLE PRECISION,
+    p_radius_meters INT DEFAULT 500,
+    p_limit INT DEFAULT 10
+)
+RETURNS TABLE (
+    route_id INT,
+    route_name VARCHAR,
+    origin_distance_meters DOUBLE PRECISION,
+    dest_distance_meters DOUBLE PRECISION,
+    total_walking_distance DOUBLE PRECISION,
+    active_bus_count BIGINT,
+    nearest_origin_stop_id INT,
+    nearest_origin_stop_name VARCHAR,
+    nearest_dest_stop_id INT,
+    nearest_dest_stop_name VARCHAR,
+    route_length_meters DOUBLE PRECISION
+) AS $$
+DECLARE
+    v_origin_point GEOMETRY(POINT, 4326);
+    v_dest_point GEOMETRY(POINT, 4326);
+BEGIN
+    -- Create origin and destination points
+    v_origin_point := fn_create_point(p_origin_lat, p_origin_lon);
+    v_dest_point := fn_create_point(p_dest_lat, p_dest_lon);
+
+    RETURN QUERY
+    SELECT
+        r.id AS route_id,
+        r.name AS route_name,
+        ST_Distance(r.route_geom::geography, v_origin_point::geography) AS origin_distance_meters,
+        ST_Distance(r.route_geom::geography, v_dest_point::geography) AS dest_distance_meters,
+        ST_Distance(r.route_geom::geography, v_origin_point::geography) +
+            ST_Distance(r.route_geom::geography, v_dest_point::geography) AS total_walking_distance,
+        (SELECT COUNT(*) FROM Buses b WHERE b.route_id = r.id AND b.status = 'Active') AS active_bus_count,
+        origin_stop.stop_id AS nearest_origin_stop_id,
+        origin_stop.stop_name AS nearest_origin_stop_name,
+        dest_stop.stop_id AS nearest_dest_stop_id,
+        dest_stop.stop_name AS nearest_dest_stop_name,
+        ST_Length(r.route_geom::geography) AS route_length_meters
+    FROM Routes r
+    -- Find nearest stop to origin on this route
+    LEFT JOIN LATERAL (
+        SELECT s.id AS stop_id, s.name AS stop_name
+        FROM Stops s
+        INNER JOIN RouteStops rs ON s.id = rs.stop_id
+        WHERE rs.route_id = r.id
+        ORDER BY s.location <-> v_origin_point
+        LIMIT 1
+    ) origin_stop ON TRUE
+    -- Find nearest stop to destination on this route
+    LEFT JOIN LATERAL (
+        SELECT s.id AS stop_id, s.name AS stop_name
+        FROM Stops s
+        INNER JOIN RouteStops rs ON s.id = rs.stop_id
+        WHERE rs.route_id = r.id
+        ORDER BY s.location <-> v_dest_point
+        LIMIT 1
+    ) dest_stop ON TRUE
+    WHERE r.route_geom IS NOT NULL
+        -- Route must pass within radius of BOTH origin AND destination
+        AND ST_DWithin(r.route_geom::geography, v_origin_point::geography, p_radius_meters)
+        AND ST_DWithin(r.route_geom::geography, v_dest_point::geography, p_radius_meters)
+    ORDER BY total_walking_distance ASC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ============================================================================
+-- FIND BUSES TO DESTINATION
+-- ============================================================================
+
+-- Function: fn_find_buses_to_destination
+-- Description: Finds active buses on routes that connect origin and destination
+-- Parameters:
+--   p_origin_lat: Origin latitude
+--   p_origin_lon: Origin longitude
+--   p_dest_lat: Destination latitude
+--   p_dest_lon: Destination longitude
+--   p_radius_meters: Search radius in meters (default 500)
+--   p_limit: Maximum number of results (default 10)
+-- Returns: TABLE with bus and route information
+-- Usage: SELECT * FROM fn_find_buses_to_destination(21.0285, 105.8542, 21.0368, 105.8347, 500, 5);
+DROP FUNCTION IF EXISTS fn_find_buses_to_destination;
+CREATE OR REPLACE FUNCTION fn_find_buses_to_destination(
+    p_origin_lat DOUBLE PRECISION,
+    p_origin_lon DOUBLE PRECISION,
+    p_dest_lat DOUBLE PRECISION,
+    p_dest_lon DOUBLE PRECISION,
+    p_radius_meters INT DEFAULT 500,
+    p_limit INT DEFAULT 10
+)
+RETURNS TABLE (
+    bus_id INT,
+    plate_number VARCHAR,
+    bus_name VARCHAR,
+    route_id INT,
+    route_name VARCHAR,
+    bus_distance_from_origin DOUBLE PRECISION,
+    origin_distance_from_route DOUBLE PRECISION,
+    dest_distance_from_route DOUBLE PRECISION,
+    bus_lat DOUBLE PRECISION,
+    bus_lon DOUBLE PRECISION
+) AS $$
+DECLARE
+    v_origin_point GEOMETRY(POINT, 4326);
+BEGIN
+    -- Create origin point for distance calculation
+    v_origin_point := fn_create_point(p_origin_lat, p_origin_lon);
+
+    RETURN QUERY
+    SELECT
+        b.bus_id,
+        b.plate_number,
+        b.name AS bus_name,
+        b.route_id,
+        valid_routes.route_name,
+        CASE
+            WHEN b.current_location IS NOT NULL THEN
+                ST_Distance(b.current_location::geography, v_origin_point::geography)
+            ELSE NULL
+        END AS bus_distance_from_origin,
+        valid_routes.origin_distance_meters,
+        valid_routes.dest_distance_meters,
+        CASE WHEN b.current_location IS NOT NULL THEN ST_Y(b.current_location) ELSE NULL END AS bus_lat,
+        CASE WHEN b.current_location IS NOT NULL THEN ST_X(b.current_location) ELSE NULL END AS bus_lon
+    FROM fn_find_routes_to_destination(
+        p_origin_lat, p_origin_lon,
+        p_dest_lat, p_dest_lon,
+        p_radius_meters,
+        50  -- Get more routes to find buses
+    ) valid_routes
+    INNER JOIN Buses b ON b.route_id = valid_routes.route_id
+    WHERE b.status = 'Active'
+        AND b.current_location IS NOT NULL
+    ORDER BY bus_distance_from_origin ASC NULLS LAST
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ============================================================================
 -- EXAMPLES AND TESTING
 -- ============================================================================
 
