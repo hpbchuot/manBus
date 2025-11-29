@@ -221,6 +221,47 @@ def find_routes_near_location():
         logger.error(f"Failed to find routes near location: {str(e)}", exc_info=True)
         return ErrorResponse.error(f'Failed to find routes: {str(e)}')
 
+@route_api.route('/journey', methods=['GET'])
+def find_buses_to_destination():
+    """
+    Find buses/routes from origin to destination.
+
+    Query Parameters:
+        - origin_latitude: float
+        - origin_longitude: float
+        - destination_latitude: float
+        - destination_longitude: float
+    Returns:
+        200: List of routes/buses
+        400: Validation error
+        500: Internal server error
+    """
+    try:
+        origin_latitude = request.args.get('origin_latitude', type=float)
+        origin_longitude = request.args.get('origin_longitude', type=float)
+        destination_latitude = request.args.get('destination_latitude', type=float)
+        destination_longitude = request.args.get('destination_longitude', type=float)
+
+        if None in [origin_latitude, origin_longitude, destination_latitude, destination_longitude]:
+            return ErrorResponse.fail("All origin and destination coordinates are required")
+
+        route_service = get_route_service()
+        routes = route_service.find_buses_to_destination(
+            origin_latitude,
+            origin_longitude,
+            destination_latitude,
+            destination_longitude
+        )
+
+        return ErrorResponse.success(data=routes)
+
+    except ValueError as e:
+        logger.warning(f"Find buses to destination error: {str(e)}")
+        return ErrorResponse.fail(str(e))
+    except Exception as e:
+        logger.error(f"Failed to find buses to destination: {str(e)}", exc_info=True)
+        return ErrorResponse.error(f'Failed to find buses: {str(e)}')
+
 
 @route_api.route('/<int:route_id>/check-point', methods=['GET'])
 def check_point_on_route(route_id):

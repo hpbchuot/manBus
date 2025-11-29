@@ -182,6 +182,42 @@ class RouteRepository(BaseRepository):
         result = self._execute_query(query, (route_id, latitude, longitude, tolerance_meters), fetch_one=True)
         return result.get('result', False) if result else False
 
+    def find_buses_to_destination(
+        self,
+        current_latitude: float,
+        current_longitude: float,
+        destination_latitude: float,
+        destination_longitude: float,
+        radius_meters: int = 500,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Find routes that go from current location to destination using PostgreSQL function.
+        Args:
+
+            current_latitude: Current latitude
+            current_longitude: Current longitude
+            destination_latitude: Destination latitude
+            destination_longitude: Destination longitude
+            radius_meters: Search radius in meters
+            limit: Maximum number of results
+        Returns:
+            List of route dicts that serve the destination
+        """
+        query = 'SELECT * FROM fn_find_buses_to_destination(%s, %s, %s, %s, %s, %s)'
+        return self._execute_query(
+            query,
+            (
+                current_latitude,
+                current_longitude,
+                destination_latitude,
+                destination_longitude,
+                radius_meters,
+                limit
+            ),
+            fetch_one=False
+        )
+    
     # Update operations
     def update(self, route_id: int, entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
