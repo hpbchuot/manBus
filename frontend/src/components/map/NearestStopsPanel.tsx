@@ -28,7 +28,7 @@ interface NearestStopsPanelProps {
 const NearestStopsPanel: React.FC<NearestStopsPanelProps> = ({ onStopSelect }) => {
   const [nearestStops, setNearestStops] = useState<NearestStop[]>([]);
   const [loading, setLoading] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  // const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const stopAdapter = new StopAdapter();
   const stopService = new StopService(api, stopAdapter);
@@ -43,7 +43,7 @@ const NearestStopsPanel: React.FC<NearestStopsPanelProps> = ({ onStopSelect }) =
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        setUserLocation({ lat: latitude, lng: longitude });
+        // setUserLocation({ lat: latitude, lng: longitude });
 
         try {
           const stops = await stopService.findNearestStops(

@@ -20,8 +20,8 @@ const StopsLayer: React.FC<StopsLayerProps> = ({
 }) => {
   const map = useMap();
   const [stops, setStops] = useState<Stop[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // const [loading, setLoading] = useState(false);
+  // const [error, setError] = useState<string | null>(null);
 
   // Initialize services
   const stopAdapter = new StopAdapter();
@@ -33,17 +33,17 @@ const StopsLayer: React.FC<StopsLayerProps> = ({
   }, []);
 
   const loadStops = async () => {
-    setLoading(true);
-    setError(null);
+    // setLoading(true);
+    // setError(null);
     try {
       const data = await stopService.getAllStops();
       setStops(data);
     } catch (err: any) {
       const message = err.response?.data?.message || 'Không thể tải danh sách điểm dừng';
-      setError(message);
+      // setError(message);
       toast.error(message);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 
