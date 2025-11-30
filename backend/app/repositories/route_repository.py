@@ -42,28 +42,28 @@ class RouteRepository(BaseRepository):
     # Read operations
     def get_by_id(self, route_id: int) -> Optional[Dict[str, Any]]:
         """
-        Get route by ID.
+        Get route by ID with GeoJSON geometry.
 
         Args:
             route_id: Route ID
 
         Returns:
-            Route dict or None if not found
+            Route dict with GeoJSON geometry or None if not found
         """
-        query = 'SELECT * FROM Routes WHERE id = %s'
+        query = 'SELECT * FROM fn_get_route_by_id(%s)'
         return self._execute_query(query, (route_id,), fetch_one=True)
 
     def get_by_name(self, route_name: str) -> Optional[Dict[str, Any]]:
         """
-        Get route by name.
+        Get route by name with GeoJSON geometry.
 
         Args:
             route_name: Route name to search
 
         Returns:
-            Route dict or None if not found
+            Route dict with GeoJSON geometry or None if not found
         """
-        query = 'SELECT * FROM Routes WHERE name = %s'
+        query = 'SELECT * FROM fn_get_route_by_name(%s)'
         return self._execute_query(query, (route_name,), fetch_one=True)
 
     def get_all(self) -> List[Dict[str, Any]]:
@@ -368,25 +368,25 @@ class StopRepository(BaseRepository):
     # Read operations
     def get_by_id(self, stop_id: int) -> Optional[Dict[str, Any]]:
         """
-        Get stop by ID.
+        Get stop by ID with extracted coordinates.
 
         Args:
             stop_id: Stop ID
 
         Returns:
-            Stop dict or None if not found
+            Stop dict with lat/lon coordinates or None if not found
         """
-        query = 'SELECT * FROM Stops WHERE id = %s'
+        query = 'SELECT * FROM fn_get_stop_by_id(%s)'
         return self._execute_query(query, (stop_id,), fetch_one=True)
 
     def get_all(self) -> List[Dict[str, Any]]:
         """
-        Get all stops.
+        Get all stops with extracted coordinates.
 
         Returns:
-            List of stop dicts
+            List of stop dicts with lat/lon coordinates
         """
-        query = 'SELECT * FROM Stops ORDER BY name'
+        query = 'SELECT * FROM fn_get_all_stops()'
         return self._execute_query(query, (), fetch_one=False)
 
     # Update operations
