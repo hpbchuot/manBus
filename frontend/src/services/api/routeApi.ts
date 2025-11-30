@@ -8,6 +8,8 @@ import type {
   RouteDTO,
   RouteStopDTO,
   RouteGeoJSONDTO,
+  BusRouteJourney,
+  BusRouteJourneyDTO,
   CreateRoutePayload,
   UpdateRoutePayload,
   UpdateRouteGeometryPayload,
@@ -34,6 +36,12 @@ export interface IRouteService {
     longitude: number,
     toleranceMeters?: number
   ): Promise<boolean>;
+  findBusesToDestination(
+    originLatitude: number,
+    originLongitude: number,
+    destinationLatitude: number,
+    destinationLongitude: number
+  ): Promise<BusRouteJourney[]>;
 
   // Write operations (Admin only)
   createRoute(payload: CreateRoutePayload): Promise<Route>;
@@ -125,6 +133,26 @@ export class RouteService implements IRouteService {
       }
     );
     return response.data.is_on_route;
+  }
+
+  async findBusesToDestination(
+    originLatitude: number,
+    originLongitude: number,
+    destinationLatitude: number,
+    destinationLongitude: number
+  ): Promise<BusRouteJourney[]> {
+    const response = await this.http.get<ApiResponse<BusRouteJourneyDTO[]>>(
+      '/routes/journey',
+      {
+        params: {
+          origin_latitude: originLatitude,
+          origin_longitude: originLongitude,
+          destination_latitude: destinationLatitude,
+          destination_longitude: destinationLongitude,
+        },
+      }
+    );
+    return response.data.map((dto) => this.adapter.toBusRouteJourney(dto));
   }
 
   async createRoute(payload: CreateRoutePayload): Promise<Route> {

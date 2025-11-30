@@ -5,7 +5,7 @@ import axios, {
   type AxiosResponse 
 } from 'axios';
 
-const BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:8000/api';
+const BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,

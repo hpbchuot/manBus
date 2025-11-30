@@ -1,11 +1,14 @@
 import { configureStore } from '@reduxjs/toolkit';
 import {type TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 import authReducer from './slices/authSlice';
+import busReducer from './slices/busSlice';
+import mapReducer from './slices/mapSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    // Sau này sẽ thêm busReducer, mapReducer ở đây
+    bus: busReducer,
+    map: mapReducer,
   },
 });
 

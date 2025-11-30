@@ -13,6 +13,15 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  name: string;
+  phone: string;
+}
+
 // Giả sử API trả về field hơi khác, ví dụ snake_case
 export interface LoginResponseDTO {
   access_token?: string; // Có thể có hoặc không (nếu dùng cookie)

@@ -66,6 +66,32 @@ export interface RouteNearDTO {
   distance_meters: number;
 }
 
+// Journey/Destination types
+export interface BusRouteJourney {
+  busId: number;
+  plateNumber: string;
+  busName: string;
+  routeId: number;
+  routeName: string;
+  busDistanceFromOrigin: number;
+  originDistanceFromRoute: number;
+  destDistanceFromRoute: number;
+  busLocation: Location;
+}
+
+export interface BusRouteJourneyDTO {
+  bus_id: number;
+  plate_number: string;
+  bus_name: string;
+  route_id: number;
+  route_name: string;
+  bus_distance_from_origin: number;
+  origin_distance_from_route: number;
+  dest_distance_from_route: number;
+  bus_lat: number;
+  bus_lon: number;
+}
+
 // Payloads
 export interface CreateRoutePayload {
   name: string;
