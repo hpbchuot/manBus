@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { login as loginAction, logout as logoutAction, clearError } from '@/store/slices/authSlice';
-import type { LoginPayload } from '@/types/auth';
+import { register as registerAction, login as loginAction, logout as logoutAction, clearError } from '@/store/slices/authSlice';
+import type { LoginPayload, RegisterPayload } from '@/types/auth';
 import { toast } from 'react-toastify';
 
 export const useAuth = () => {
@@ -9,6 +9,16 @@ export const useAuth = () => {
   
   // Lấy state từ Redux
   const { user, token, isLoading, error } = useAppSelector((state) => state.auth);
+
+  // Wrapper hàm Register
+  const register = useCallback(async (payload: RegisterPayload) => {
+    try {
+      await dispatch(registerAction(payload)).unwrap();
+    } catch (err: any) {
+      toast.error(err || 'Đăng ký thất bại');
+      throw err;
+    }
+  }, [dispatch]);
 
   // Wrapper hàm Login
   const login = useCallback(async (payload: LoginPayload) => {
@@ -38,6 +48,7 @@ export const useAuth = () => {
     isAuthenticated: !!user, // Helper boolean tiện lợi
     isLoading,
     error,
+    register,
     login,
     logout,
     resetError,
