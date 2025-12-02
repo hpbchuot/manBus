@@ -1,14 +1,3 @@
--- ============================================================================
--- BUSES.SQL - Bus Fleet Management Functions
--- ============================================================================
--- Description: Functions for managing buses, tracking locations, and fleet operations
--- Dependencies: Buses, Routes tables, PostGIS extension, utilities.sql
--- ============================================================================
-
--- ============================================================================
--- BUS CREATION
--- ============================================================================
-
 -- Function: fn_create_bus
 -- Description: Creates a new bus with validation
 -- Parameters:
@@ -19,6 +8,7 @@
 --   p_status: Bus status (default 'Active')
 -- Returns: INT - New bus ID
 -- Usage: SELECT fn_create_bus('29A-12345', 'Bus 101', 1, 'Hyundai Universe', 'Active');
+DROP FUNCTION IF EXISTS fn_create_bus;
 CREATE OR REPLACE FUNCTION fn_create_bus(
     p_plate_number VARCHAR(20),
     p_name VARCHAR(100),
@@ -62,10 +52,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- BUS LOCATION UPDATE
--- ============================================================================
-
 -- Function: fn_update_bus_location
 -- Description: Updates bus current location
 -- Parameters:
@@ -74,6 +60,7 @@ $$ LANGUAGE plpgsql;
 --   p_lon: Longitude
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_update_bus_location(1, 10.8231, 106.6297);
+DROP FUNCTION IF EXISTS fn_update_bus_location;
 CREATE OR REPLACE FUNCTION fn_update_bus_location(
     p_bus_id INT,
     p_lat DOUBLE PRECISION,
@@ -101,10 +88,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- BUS STATUS UPDATE
--- ============================================================================
 
 -- Function: fn_update_bus_status
 -- Description: Updates bus status with validation
@@ -137,10 +120,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- BUS ROUTE ASSIGNMENT
--- ============================================================================
 
 -- Function: fn_assign_bus_to_route
 -- Description: Assigns or reassigns a bus to a different route
@@ -181,14 +160,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- GET BUSES ON ROUTE
--- ============================================================================
-
 -- Function: fn_get_buses_on_route
 -- Description: Returns all buses assigned to a route
 -- Parameters:
 --   p_route_id: Route ID
+--   p_cursor: Pagination cursor (default NULL)
+--   p_page_size: Number of records per page (default 5)
 -- Returns: TABLE with bus information
 -- Usage: SELECT * FROM fn_get_buses_on_route(1);
 DROP FUNCTION IF EXISTS fn_get_buses_on_route;
@@ -218,9 +195,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- FIND NEAREST BUS
--- ============================================================================
 
 -- Function: fn_find_nearest_bus
 -- Description: Finds the nearest bus to a location
@@ -275,10 +249,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- CHECK IF BUS IS ON ROUTE
--- ============================================================================
-
 -- Function: fn_is_bus_on_route
 -- Description: Checks if bus location is within tolerance of assigned route
 -- Parameters:
@@ -327,18 +297,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ALL BUSES
--- ============================================================================
-
 -- Function: fn_get_all_buses
 -- Description: Returns all buses with route information
 -- Parameters:
+--   p_cursor: Pagination cursor (default NULL)
+--   p_page_size: Number of records per page (default 10)
 --   p_include_inactive: Include inactive/maintenance/retired buses (default FALSE)
 -- Returns: TABLE with bus information
--- Usage: SELECT * FROM fn_get_all_buses(FALSE);
+-- Usage: SELECT * FROM fn_get_all_buses(NULL, 10, FALSE);
 DROP FUNCTION IF EXISTS fn_get_all_buses;
-CREATE OR REPLACE FUNCTION fn_get_all_buses(p_include_inactive BOOLEAN DEFAULT FALSE)
+CREATE OR REPLACE FUNCTION fn_get_all_buses(
+    p_cursor INT DEFAULT NULL,
+    p_page_size INT DEFAULT 10,
+    p_include_inactive BOOLEAN DEFAULT FALSE
+)
 RETURNS TABLE (
     bus_id INT,
     plate_number VARCHAR(20),
@@ -351,6 +323,7 @@ RETURNS TABLE (
     current_longitude DOUBLE PRECISION
 ) AS $$
 BEGIN
+
     RETURN QUERY
     SELECT
         b.bus_id,
@@ -364,14 +337,13 @@ BEGIN
         CASE WHEN b.current_location IS NOT NULL THEN ST_X(b.current_location) ELSE NULL END AS current_longitude
     FROM Buses b
     INNER JOIN Routes r ON b.route_id = r.id
-    WHERE p_include_inactive OR b.status = 'Active'
-    ORDER BY b.name;
+    WHERE (p_include_inactive OR b.status = 'Active') AND
+          (p_cursor IS NULL OR b.bus_id > p_cursor)
+    ORDER BY b.name
+    LIMIT p_page_size;
+    
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET BUS BY PLATE NUMBER
--- ============================================================================
 
 -- Function: fn_get_bus_by_plate
 -- Description: Retrieves bus information by plate number
@@ -409,10 +381,6 @@ BEGIN
     WHERE UPPER(b.plate_number) = UPPER(TRIM(p_plate_number));
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET BUS LOCATION DETAILS
--- ============================================================================
 
 -- Function: fn_get_bus_location_details
 -- Description: Gets detailed location information for a bus
@@ -475,10 +443,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ACTIVE BUSES COUNT
--- ============================================================================
-
 -- Function: fn_get_active_buses_count
 -- Description: Returns count of active buses
 -- Returns: INT - Number of active buses
@@ -497,10 +461,6 @@ BEGIN
     RETURN active_count;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- INITIALIZE BUS POSITIONS
--- ============================================================================
 
 -- Function: fn_initialize_bus_positions
 -- Description: Initializes positions for buses without current_location or route_progress
@@ -566,9 +526,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- SNAP BUS TO ROUTE
--- ============================================================================
 
 -- Function: fn_snap_bus_to_route
 -- Description: Snaps an off-route bus back to the nearest point on its assigned route
@@ -617,10 +574,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- AUTO-UPDATE BUS POSITIONS
--- ============================================================================
 
 -- Function: fn_update_bus_positions_auto
 -- Description: Moves all active buses along their routes by one step
@@ -738,41 +691,3 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- EXAMPLES AND TESTING
--- ============================================================================
-
--- Example usage:
--- Create a bus:
--- SELECT fn_create_bus('29A-12345', 'Bus 101', 1, 'Hyundai Universe', 'Active');
-
--- Update bus location:
--- SELECT fn_update_bus_location(1, 10.8231, 106.6297);
-
--- Update bus status:
--- SELECT fn_update_bus_status(1, 'Maintenance');
-
--- Assign bus to route:
--- SELECT fn_assign_bus_to_route(1, 2);
-
--- Get buses on route:
--- SELECT * FROM fn_get_buses_on_route(1);
-
--- Find nearest bus:
--- SELECT * FROM fn_find_nearest_bus(10.8231, 106.6297, NULL, 5);
-
--- Check if bus is on route:
--- SELECT fn_is_bus_on_route(1, 100);
-
--- Get all buses:
--- SELECT * FROM fn_get_all_buses(FALSE);
-
--- Get bus by plate number:
--- SELECT * FROM fn_get_bus_by_plate('29A-12345');
-
--- Get bus location details:
--- SELECT * FROM fn_get_bus_location_details(1);
-
--- Get active buses count:
--- SELECT fn_get_active_buses_count();

@@ -1,14 +1,3 @@
--- ============================================================================
--- ROUTES.SQL - Route and Stop Management Functions
--- ============================================================================
--- Description: Functions for managing routes, stops, and spatial operations
--- Dependencies: Routes, Stops, RouteStops tables, PostGIS extension, utilities.sql
--- ============================================================================
-
--- ============================================================================
--- ROUTE CREATION
--- ============================================================================
-
 -- Function: fn_create_route
 -- Description: Creates a new route with geometry from coordinate array
 -- Parameters:
@@ -42,10 +31,6 @@ BEGIN
     RETURN new_route_id;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- ROUTE UPDATE
--- ============================================================================
 
 -- Function: fn_update_route_geometry
 -- Description: Updates route geometry
@@ -85,10 +70,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- STOP CREATION
--- ============================================================================
-
 -- Function: fn_create_stop
 -- Description: Creates a new bus stop
 -- Parameters:
@@ -124,10 +105,6 @@ BEGIN
     RETURN new_stop_id;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- ROUTE-STOP ASSOCIATION
--- ============================================================================
 
 -- Function: fn_add_stop_to_route
 -- Description: Adds a stop to a route with sequence number
@@ -179,10 +156,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- ROUTE-STOP REMOVAL
--- ============================================================================
-
 -- Function: fn_remove_stop_from_route
 -- Description: Removes a stop from a route
 -- Parameters:
@@ -212,10 +185,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- REORDER ROUTE STOPS
--- ============================================================================
 
 -- Function: fn_reorder_route_stops
 -- Description: Updates stop sequences for a route
@@ -257,10 +226,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- SPATIAL QUERIES - ROUTE LENGTH
--- ============================================================================
-
 -- Function: fn_get_route_length
 -- Description: Calculates route length in meters
 -- Parameters:
@@ -287,10 +252,6 @@ BEGIN
     RETURN route_length;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- SPATIAL QUERIES - NEAREST STOPS
--- ============================================================================
 
 -- Function: fn_find_nearest_stops
 -- Description: Finds stops within a radius of a location
@@ -333,10 +294,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- SPATIAL QUERIES - ROUTES NEAR LOCATION
--- ============================================================================
-
 -- Function: fn_find_routes_near_location
 -- Description: Finds routes passing near a location
 -- Parameters:
@@ -371,10 +328,6 @@ BEGIN
     ORDER BY r.route_geom <-> v_point;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- SPATIAL QUERIES - POINT ON ROUTE CHECK
--- ============================================================================
 
 -- Function: fn_is_point_on_route
 -- Description: Checks if a point is within tolerance of a route
@@ -414,16 +367,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET STOPS ON ROUTE
--- ============================================================================
-
 -- Function: fn_get_stops_on_route
 -- Description: Returns all stops for a route ordered by sequence
 -- Parameters:
 --   p_route_id: Route ID
 -- Returns: TABLE with stop information
 -- Usage: SELECT * FROM fn_get_stops_on_route(1);
+DROP FUNCTION IF EXISTS fn_get_stops_on_route;
 CREATE OR REPLACE FUNCTION fn_get_stops_on_route(p_route_id INT)
 RETURNS TABLE (
     stop_id INT,
@@ -447,15 +397,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ALL ROUTES
--- ============================================================================
-
 -- Function: fn_get_all_routes
 -- Description: Returns all routes with basic information
 -- Returns: TABLE with route information
--- Usage: SELECT * FROM fn_get_all_routes();
-CREATE OR REPLACE FUNCTION fn_get_all_routes()
+-- Usage: SELECT * FROM fn_get_all_routes(NULL, 10);
+DROP FUNCTION IF EXISTS fn_get_all_routes;
+CREATE OR REPLACE FUNCTION fn_get_all_routes(
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 10
+)
 RETURNS TABLE (
     route_id INT,
     route_name VARCHAR(100),
@@ -474,14 +424,12 @@ BEGIN
         END AS route_length_meters
     FROM Routes r
     LEFT JOIN RouteStops rs ON r.id = rs.route_id
+    WHERE p_cursor IS NULL OR r.id > p_cursor
     GROUP BY r.id, r.name, r.route_geom
-    ORDER BY r.id;
+    ORDER BY r.id
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET ROUTE BY ID WITH GEOJSON
--- ============================================================================
 
 -- Function: fn_get_route_by_id
 -- Description: Returns route by ID with geometry as GeoJSON
@@ -489,6 +437,7 @@ $$ LANGUAGE plpgsql STABLE;
 --   p_route_id: Route ID
 -- Returns: TABLE with route information and GeoJSON geometry
 -- Usage: SELECT * FROM fn_get_route_by_id(1);
+DROP FUNCTION IF EXISTS fn_get_route_by_id;
 CREATE OR REPLACE FUNCTION fn_get_route_by_id(p_route_id INT)
 RETURNS TABLE (
     id INT,
@@ -509,10 +458,6 @@ BEGIN
     WHERE r.id = p_route_id;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET ROUTE BY NAME WITH GEOJSON
--- ============================================================================
 
 -- Function: fn_get_route_by_name
 -- Description: Returns route by name with geometry as GeoJSON
@@ -541,10 +486,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ROUTE AS GEOJSON (GEOMETRY ONLY)
--- ============================================================================
-
 -- Function: fn_get_route_geojson
 -- Description: Returns route geometry as GeoJSON for API consumption
 -- Parameters:
@@ -568,10 +509,6 @@ BEGIN
     RETURN route_geojson;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- FIND ROUTES TO DESTINATION
--- ============================================================================
 
 -- Function: fn_find_routes_to_destination
 -- Description: Finds routes that pass near both origin AND destination points
@@ -656,10 +593,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- FIND BUSES TO DESTINATION
--- ============================================================================
-
 -- Function: fn_find_buses_to_destination
 -- Description: Finds active buses on routes that connect origin and destination
 -- Parameters:
@@ -728,20 +661,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- EXAMPLES AND TESTING
--- ============================================================================
-
--- ============================================================================
--- GET STOP BY ID WITH COORDINATES
--- ============================================================================
-
 -- Function: fn_get_stop_by_id
 -- Description: Returns stop by ID with extracted coordinates
 -- Parameters:
 --   p_stop_id: Stop ID
 -- Returns: TABLE with stop information and extracted coordinates
 -- Usage: SELECT * FROM fn_get_stop_by_id(1);
+DROP FUNCTION IF EXISTS fn_get_stop_by_id;
 CREATE OR REPLACE FUNCTION fn_get_stop_by_id(p_stop_id INT)
 RETURNS TABLE (
     id INT,
@@ -761,15 +687,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ALL STOPS WITH COORDINATES
--- ============================================================================
-
 -- Function: fn_get_all_stops
 -- Description: Returns all stops with extracted coordinates
 -- Returns: TABLE with stop information and extracted coordinates
--- Usage: SELECT * FROM fn_get_all_stops();
-CREATE OR REPLACE FUNCTION fn_get_all_stops()
+-- Usage: SELECT * FROM fn_get_all_stops(NULL, 100);
+DROP FUNCTION IF EXISTS fn_get_all_stops;
+CREATE OR REPLACE FUNCTION fn_get_all_stops(
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 100
+)
 RETURNS TABLE (
     id INT,
     name VARCHAR(255),
@@ -784,50 +710,8 @@ BEGIN
         ST_Y(s.location) AS latitude,
         ST_X(s.location) AS longitude
     FROM Stops s
-    ORDER BY s.name;
+    WHERE p_cursor IS NULL OR s.id > p_cursor
+    ORDER BY s.name
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- EXAMPLES AND TESTING
--- ============================================================================
-
--- Example usage:
--- Create a route:
--- SELECT fn_create_route('Route 1', '[[10.8231,106.6297],[10.8241,106.6307],[10.8251,106.6317]]'::jsonb);
-
--- Update route geometry:
--- SELECT fn_update_route_geometry(1, '[[10.8231,106.6297],[10.8241,106.6307]]'::jsonb);
-
--- Create a stop:
--- SELECT fn_create_stop('Ben Thanh Market', 10.7723, 106.6981);
-
--- Add stop to route:
--- SELECT fn_add_stop_to_route(1, 1, 1);
-
--- Remove stop from route:
--- SELECT fn_remove_stop_from_route(1, 1);
-
--- Reorder stops:
--- SELECT fn_reorder_route_stops(1, '[{"stop_id":1,"sequence":2},{"stop_id":2,"sequence":1}]'::jsonb);
-
--- Get route length:
--- SELECT fn_get_route_length(1);
-
--- Find nearest stops:
--- SELECT * FROM fn_find_nearest_stops(10.8231, 106.6297, 1000, 5);
-
--- Find routes near location:
--- SELECT * FROM fn_find_routes_near_location(10.8231, 106.6297, 500);
-
--- Check if point is on route:
--- SELECT fn_is_point_on_route(1, 10.8231, 106.6297, 100);
-
--- Get stops on route:
--- SELECT * FROM fn_get_stops_on_route(1);
-
--- Get all routes:
--- SELECT * FROM fn_get_all_routes();
-
--- Get route as GeoJSON:
--- SELECT fn_get_route_geojson(1);
