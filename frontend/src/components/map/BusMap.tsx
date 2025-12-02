@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import { Box, ToggleButtonGroup, ToggleButton, Paper } from '@mui/material';
-import LayersIcon from '@mui/icons-material/Layers';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import RouteIcon from '@mui/icons-material/Route';
+import DirectionsBusIcon from '@mui/icons-material/DirectionsBus';
 import { MAP_CONFIG } from '@/config/mapConfig';
 import StopsLayer from './StopsLayer';
+import BusLayer from './BusLayer';
 import RoutePolyline from './RoutePolyline';
 import MapControlsWrapper from './MapControlsWrapper';
+import { useActiveBuses } from '@/hooks/useBusData';
 import type { Stop } from '@/types/stop';
 import type { Route } from '@/types/route';
+import type { Bus } from '@/types/bus';
 import L from 'leaflet';
 
 // Fix lỗi icon mặc định của Leaflet
@@ -48,19 +51,26 @@ interface BusMapProps {
   selectedRoute?: Route | null;
   onStopClick?: (stop: Stop) => void;
   onRouteClick?: (route: Route) => void;
+  onBusClick?: (bus: Bus) => void;
 }
 
-const BusMap: React.FC<BusMapProps> = ({ 
+const BusMap: React.FC<BusMapProps> = ({
   selectedRoute = null,
   onStopClick,
-  onRouteClick 
+  onRouteClick,
+  onBusClick
 }) => {
-  const [layers, setLayers] = useState<string[]>(['stops']); // Layers hiển thị
+  const [layers, setLayers] = useState<string[]>(['stops', 'buses']); // Layers hiển thị
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [selectedStopData, setSelectedStopData] = useState<Stop | null>(null);
+  const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
+  const [trackedBusId] = useState<number | null>(null);
+
+  // Fetch active buses with auto-refresh every 30 seconds
+  const { data: buses = [] } = useActiveBuses();
 
   const handleLayerToggle = (
-    event: React.MouseEvent<HTMLElement>,
+    _event: React.MouseEvent<HTMLElement>,
     newLayers: string[]
   ) => {
     setLayers(newLayers);
@@ -70,6 +80,11 @@ const BusMap: React.FC<BusMapProps> = ({
     setSelectedStopId(stop.id);
     setSelectedStopData(stop);
     onStopClick?.(stop);
+  };
+
+  const handleBusClick = (bus: Bus) => {
+    setSelectedBusId(bus.busId);
+    onBusClick?.(bus);
   };
 
   return (
@@ -95,6 +110,9 @@ const BusMap: React.FC<BusMapProps> = ({
         >
           <ToggleButton value="stops" aria-label="stops">
             <LocationOnIcon fontSize="small" />
+          </ToggleButton>
+          <ToggleButton value="buses" aria-label="buses">
+            <DirectionsBusIcon fontSize="small" />
           </ToggleButton>
           <ToggleButton value="routes" aria-label="routes">
             <RouteIcon fontSize="small" />
@@ -127,6 +145,17 @@ const BusMap: React.FC<BusMapProps> = ({
             visible={true}
             selectedStopId={selectedStopId}
             onStopClick={handleStopClick}
+          />
+        )}
+
+        {/* Bus Layer - Real-time bus positions */}
+        {layers.includes('buses') && (
+          <BusLayer
+            buses={buses}
+            selectedBusId={selectedBusId}
+            trackedBusId={trackedBusId}
+            onBusClick={handleBusClick}
+            visible={true}
           />
         )}
 

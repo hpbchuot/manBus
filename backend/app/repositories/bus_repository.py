@@ -53,9 +53,8 @@ class BusRepository(BaseRepository):
         Returns:
             Bus dict or None if not found
         """
-        # Use the fn_get_all_buses and filter by ID for consistency
-        # Or we can query directly if there's a specific function
-        query = 'SELECT * FROM Buses WHERE bus_id = %s'
+
+        query = 'SELECT * FROM fn_get_bus_by_id(%s)'
         return self._execute_query(query, (bus_id,), fetch_one=True)
 
     def get_by_plate_number(self, plate_number: str) -> Optional[Dict[str, Any]]:
@@ -71,7 +70,11 @@ class BusRepository(BaseRepository):
         query = 'SELECT * FROM fn_get_bus_by_plate(%s)'
         return self._execute_query(query, (plate_number,), fetch_one=True)
 
-    def get_all(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+    def get_all(
+            self, 
+            cursor: Optional[int] = None,
+            limit: Optional[int] = 10,
+            include_inactive: bool = False) -> List[Dict[str, Any]]:
         """
         Get all buses using PostgreSQL function.
 
@@ -81,8 +84,8 @@ class BusRepository(BaseRepository):
         Returns:
             List of bus dicts
         """
-        query = 'SELECT * FROM fn_get_all_buses(%s)'
-        return self._execute_query(query, (include_inactive,), fetch_one=False)
+        query = 'SELECT * FROM fn_get_all_buses(%s, %s, %s)'
+        return self._execute_query(query, (cursor, limit, include_inactive), fetch_one=False)
 
     def get_by_route(self, route_id: int) -> List[Dict[str, Any]]:
         """
@@ -97,14 +100,14 @@ class BusRepository(BaseRepository):
         query = 'SELECT * FROM fn_get_buses_on_route(%s)'
         return self._execute_query(query, (route_id,), fetch_one=False)
 
-    def get_active_buses(self) -> List[Dict[str, Any]]:
+    def get_active_buses(self, cursor: Optional[int] = None, limit: Optional[int] = 10) -> List[Dict[str, Any]]:
         """
         Get all active buses.
 
         Returns:
             List of active bus dicts
         """
-        return self.get_all(include_inactive=False)
+        return self.get_all(cursor, limit, include_inactive=False)
 
     def find_nearest_bus(
         self,

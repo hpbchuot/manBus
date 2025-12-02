@@ -4,7 +4,7 @@ import MainLayout from '@/layouts/MainLayout';
 import HomePage from '@/pages/HomePage';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
-const AdminDashboard = React.lazy(() => import('@/pages/admin/AdminDashboard'));
+// const AdminDashboard = React.lazy(() => import('@/pages/admin/AdminDashboard'));
 const DriverDashboard = React.lazy(() => import('@/pages/driver/DriverDashboard'));
 
 export const AppRoutes: React.FC = () => {
@@ -16,7 +16,7 @@ export const AppRoutes: React.FC = () => {
       </Route>
 
       {/* Protected Routes - Admin Only */}
-      <Route
+      {/* <Route
         path="/admin"
         element={
           <ProtectedRoute requireAdmin>
@@ -32,7 +32,7 @@ export const AppRoutes: React.FC = () => {
             </React.Suspense>
           }
         />
-      </Route>
+      </Route> */}
 
       {/* Protected Routes - Driver Only */}
       <Route

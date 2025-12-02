@@ -52,9 +52,9 @@ const MainLayout: React.FC = () => {
     setLoginOpen(false);
   };
 
-  const handleOpenRegister = () => {
-    setRegisterOpen(true);
-  };
+  // const handleOpenRegister = () => {
+  //   setRegisterOpen(true);
+  // };
 
   const handleCloseRegister = () => {
     setRegisterOpen(false);

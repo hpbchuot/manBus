@@ -1,9 +1,10 @@
 import type { IHttpClient } from '@/types/http';
 import type { ApiResponse } from '@/services/api';
 import type { IAuthAdapter } from '@/services/adapters/authAdapter';
-import type { LoginPayload, LoginResponseDTO, User } from '@/types/auth';
+import type { LoginPayload, RegisterPayload, LoginResponseDTO, User } from '@/types/auth';
 
 export interface IAuthService {
+  register(payload: RegisterPayload): Promise<User>;
   login(payload: LoginPayload): Promise<User>;
   logout(): Promise<void>;
 }
@@ -13,6 +14,11 @@ export class AuthService implements IAuthService {
     private http: IHttpClient,   // Inject HttpClient
     private adapter: IAuthAdapter // Inject Adapter
   ) {}
+
+  async register(payload: RegisterPayload): Promise<User> {
+    const response = await this.http.post<ApiResponse<LoginResponseDTO>>('/auth/register', payload);
+    return this.adapter.toUser(response.data);
+  }
 
   async login(payload: LoginPayload): Promise<User> {
     // 1. Gọi API nhận dữ liệu thô

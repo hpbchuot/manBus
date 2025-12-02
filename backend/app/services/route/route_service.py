@@ -90,14 +90,14 @@ class RouteService:
         """
         return self.repository.get_by_name(route_name)
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, cursor: Optional[int] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get all routes with stop count and length.
 
         Returns:
             List of route dicts
         """
-        return self.repository.get_all()
+        return self.repository.get_all(cursor, limit)
 
     def get_stops_on_route(self, route_id: int) -> List[Dict[str, Any]]:
         """
@@ -212,6 +212,39 @@ class RouteService:
             raise ValueError("Limit must be at least 1")
 
         return self.repository.find_nearest_stops(latitude, longitude, radius_meters, limit)
+
+    def find_buses_to_destination(
+        self,
+        origin_latitude: float,
+        origin_longitude: float,
+        dest_latitude: float,
+        dest_longitude: float,
+        radius_meters: int = 1000
+    ) -> List[Dict[str, Any]]:
+        """
+        Find routes connecting origin to destination within a radius.
+
+        Args:
+            origin_latitude: Origin latitude
+            origin_longitude: Origin longitude
+            dest_latitude: Destination latitude
+            dest_longitude: Destination longitude
+            radius_meters: Search radius in meters
+
+        Returns:
+            List of route dicts connecting origin to destination
+        """
+        # Business validation
+        if radius_meters < 1:
+            raise ValueError("Radius must be at least 1 meter")
+
+        return self.repository.find_buses_to_destination(
+            origin_latitude,
+            origin_longitude,
+            dest_latitude,
+            dest_longitude,
+            radius_meters
+        )
 
     def is_point_on_route(
         self,

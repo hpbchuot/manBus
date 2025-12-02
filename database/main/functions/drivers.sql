@@ -1,14 +1,3 @@
--- ============================================================================
--- DRIVERS.SQL - Driver Management Functions
--- ============================================================================
--- Description: Functions for managing drivers and bus assignments
--- Dependencies: Drivers, Buses, Users tables
--- ============================================================================
-
--- ============================================================================
--- DRIVER CREATION
--- ============================================================================
-
 -- Function: fn_create_driver
 -- Description: Creates a new driver record
 -- Parameters:
@@ -85,10 +74,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- BUS ASSIGNMENT
--- ============================================================================
-
 -- Function: fn_assign_bus_to_driver
 -- Description: Assigns or reassigns a bus to a driver
 -- Parameters:
@@ -147,10 +132,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- DRIVER STATUS UPDATE
--- ============================================================================
-
 -- Function: fn_set_driver_status
 -- Description: Updates driver status
 -- Parameters:
@@ -185,10 +166,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- GET DRIVER BY USER ID
--- ============================================================================
 
 -- Function: fn_get_driver_by_user
 -- Description: Retrieves driver information for a user
@@ -226,16 +203,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ACTIVE DRIVERS
--- ============================================================================
-
 -- Function: fn_get_active_drivers
 -- Description: Returns all active drivers with their assignments
 -- Returns: TABLE with driver information
--- Usage: SELECT * FROM fn_get_active_drivers();
+-- Usage: SELECT * FROM fn_get_active_drivers(NULL, 100);
 DROP FUNCTION IF EXISTS fn_get_active_drivers;
-CREATE OR REPLACE FUNCTION fn_get_active_drivers()
+CREATE OR REPLACE FUNCTION fn_get_active_drivers(
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 100
+)
 RETURNS TABLE (
     driver_id INT,
     driver_name VARCHAR(100),
@@ -269,22 +245,24 @@ BEGIN
     INNER JOIN Routes r ON b.route_id = r.id
     WHERE d.status = 'Active'
         AND u.is_deleted = FALSE
-    ORDER BY u.name;
+        AND (p_cursor IS NULL OR d.id > p_cursor)
+    ORDER BY u.name
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET ALL DRIVERS
--- ============================================================================
 
 -- Function: fn_get_all_drivers
 -- Description: Returns all drivers regardless of status
 -- Parameters:
 --   p_include_deleted_users: Include drivers whose users are deleted (default FALSE)
 -- Returns: TABLE with driver information
--- Usage: SELECT * FROM fn_get_all_drivers(FALSE);
+-- Usage: SELECT * FROM fn_get_all_drivers(FALSE, NULL, 100);
 DROP FUNCTION IF EXISTS fn_get_all_drivers;
-CREATE OR REPLACE FUNCTION fn_get_all_drivers(p_include_deleted_users BOOLEAN DEFAULT FALSE)
+CREATE OR REPLACE FUNCTION fn_get_all_drivers(
+    p_include_deleted_users BOOLEAN DEFAULT FALSE,
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 100
+)
 RETURNS TABLE (
     driver_id INT,
     driver_name VARCHAR(100),
@@ -317,13 +295,11 @@ BEGIN
     INNER JOIN Buses b ON d.bus_id = b.bus_id
     INNER JOIN Routes r ON b.route_id = r.id
     WHERE p_include_deleted_users OR u.is_deleted = FALSE
-    ORDER BY u.name;
+        AND (p_cursor IS NULL OR d.id > p_cursor)
+    ORDER BY u.name
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET DRIVER BY BUS
--- ============================================================================
 
 -- Function: fn_get_driver_by_bus
 -- Description: Retrieves driver assigned to a specific bus
@@ -359,10 +335,6 @@ BEGIN
     ORDER BY d.status DESC; -- Active drivers first
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET DRIVERS ON ROUTE
--- ============================================================================
 
 -- Function: fn_get_drivers_on_route
 -- Description: Returns all drivers assigned to buses on a specific route
@@ -405,10 +377,6 @@ BEGIN
     ORDER BY u.name;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- UPDATE DRIVER LICENSE
--- ============================================================================
 
 -- Function: fn_update_driver_license
 -- Description: Updates driver's license number
@@ -453,10 +421,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- CHECK IF USER IS DRIVER
--- ============================================================================
-
 -- Function: fn_is_user_driver
 -- Description: Checks if a user is a driver
 -- Parameters:
@@ -476,10 +440,6 @@ BEGIN
     RETURN is_driver;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET DRIVER COUNT
--- ============================================================================
 
 -- Function: fn_get_driver_count
 -- Description: Returns count of drivers by status
@@ -511,42 +471,3 @@ BEGIN
     RETURN driver_count;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- EXAMPLES AND TESTING
--- ============================================================================
-
--- Example usage:
--- Create a driver:
--- SELECT fn_create_driver(1, 'DL123456789', 1);
-
--- Assign bus to driver:
--- SELECT fn_assign_bus_to_driver(1, 2);
-
--- Set driver status:
--- SELECT fn_set_driver_status(1, 'Inactive');
-
--- Get driver by user:
--- SELECT * FROM fn_get_driver_by_user(1);
-
--- Get active drivers:
--- SELECT * FROM fn_get_active_drivers();
-
--- Get all drivers:
--- SELECT * FROM fn_get_all_drivers(FALSE);
-
--- Get driver by bus:
--- SELECT * FROM fn_get_driver_by_bus(1);
-
--- Get drivers on route:
--- SELECT * FROM fn_get_drivers_on_route(1);
-
--- Update driver license:
--- SELECT fn_update_driver_license(1, 'DL987654321');
-
--- Check if user is driver:
--- SELECT fn_is_user_driver(1);
-
--- Get driver count:
--- SELECT fn_get_driver_count('Active');
--- SELECT fn_get_driver_count(NULL); -- All drivers

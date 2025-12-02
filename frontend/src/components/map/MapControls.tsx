@@ -17,7 +17,7 @@ interface MapControlsProps {
 const MapControls: React.FC<MapControlsProps> = ({
   onLocateMe,
   selectedStop,
-  selectedRoute,
+// selectedRoute,
 }) => {
   const map = useMap();
 
@@ -57,12 +57,12 @@ const MapControls: React.FC<MapControlsProps> = ({
     }
   };
 
-  const handleFitRoute = () => {
-    if (selectedRoute) {
-      // TODO: Implement fit route bounds
-      console.log('Fit route bounds:', selectedRoute);
-    }
-  };
+  // const handleFitRoute = () => {
+  //   if (selectedRoute) {
+  //     // TODO: Implement fit route bounds
+  //     console.log('Fit route bounds:', selectedRoute);
+  //   }
+  // };
 
   return (
     <Paper

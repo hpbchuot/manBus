@@ -1,5 +1,4 @@
 from flask import request, Blueprint, jsonify, g
-from pydantic import ValidationError
 from app.schemas.user_schemas import UserCreate, UserUpdate, UserSearchParams
 from app.schemas.base_schema import PaginationParams
 from app.middleware import token_required, admin_required
@@ -110,8 +109,6 @@ def get_all_users(current_user):
 
     Returns:
         200: List of users
-        401: Unauthorized
-        403: Forbidden (non-admin)
         500: Internal server error
     """
     try:
@@ -126,24 +123,21 @@ def get_all_users(current_user):
         # Get users with cursor-based pagination
         users = user_service.get_all_users(
             cursor=cursor,
-            limit=limit,
+            limit=limit+1,
             role=role,
             include_deleted=include_deleted
         )
 
-        # Convert to dict for JSON response
-        users_data = [user.model_dump() for user in users]
-
         # Calculate next cursor (last user's ID if results exist)
-        next_cursor = users_data[-1]['id'] if users_data else None
-        has_more = len(users_data) == limit  # If we got exactly limit, there might be more
+        next_cursor = users[-1]['id'] if users else None
+        has_next = len(users) > limit
 
         return ErrorResponse.success(
             data={
-                'users': users_data,
-                'has_more': has_more,
+                'users': users[:limit],
+                'has_next': has_next,
                 'next_cursor': next_cursor,
-                'count': len(users_data)
+                'count': len(users[:limit])
             }
         )
 
@@ -267,12 +261,20 @@ def search_users(current_user):
 
         # Get search params
         query = request.args.get('query')
-        result = user_service.search_users(query)
+        cursor = request.args.get('cursor', type=int) or None
+        limit = request.args.get('limit', type=int, default=10)
+        result = user_service.search_users(query, cursor, limit+1)
 
-        return jsonify({
-            'status': 'success',
-            'data': result
-        }), 200
+        has_next = len(result) > limit
+        next_cursor = result[-1]['id'] if result else None
+        return ErrorResponse.success(
+            data={
+                'users': result[:limit],
+                'has_next': has_next,
+                'next_cursor': next_cursor,
+                'count': len(result[:limit])
+            }
+        )
 
     except Exception as e:
         return jsonify({

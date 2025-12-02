@@ -1,14 +1,3 @@
--- ============================================================================
--- AUTH.SQL - Authentication and Authorization Functions
--- ============================================================================
--- Description: Functions for JWT token blacklisting and role-based access control
--- Dependencies: BlacklistTokens, Users tables
--- ============================================================================
-
--- ============================================================================
--- TOKEN BLACKLIST MANAGEMENT
--- ============================================================================
-
 -- Function: fn_blacklist_token
 -- Description: Adds a token to the blacklist (used during logout or token revocation)
 -- Parameters:
@@ -32,10 +21,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- TOKEN VALIDATION
--- ============================================================================
 
 -- Function: fn_is_token_blacklisted
 -- Description: Checks if a token is in the blacklist
@@ -93,10 +78,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- ROLE CHECKING
--- ============================================================================
-
 -- Function: fn_user_has_role
 -- Description: Checks if a user has a specific role
 -- Parameters:
@@ -122,10 +103,6 @@ BEGIN
     RETURN user_role = p_role_name;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- ROLE MANAGEMENT
--- ============================================================================
 
 -- Function: fn_set_user_role
 -- Description: Sets a user's role
@@ -226,18 +203,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET USERS BY ROLE
--- ============================================================================
-
 -- Function: fn_get_users_by_role
 -- Description: Returns all users with a specific role
 -- Parameters:
 --   p_role_name: Role to filter by ('Admin', 'Driver', 'User')
 -- Returns: TABLE with user information
--- Usage: SELECT * FROM fn_get_users_by_role('Driver');
+-- Usage: SELECT * FROM fn_get_users_by_role('Driver', NULL, 50);
 DROP FUNCTION IF EXISTS fn_get_users_by_role;
-CREATE OR REPLACE FUNCTION fn_get_users_by_role(p_role_name roles)
+CREATE OR REPLACE FUNCTION fn_get_users_by_role(
+    p_role_name roles,
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 100
+)
 RETURNS TABLE (
     user_id INT,
     name VARCHAR(100),
@@ -262,7 +239,10 @@ BEGIN
     FROM Users u
     WHERE u.role = p_role_name
         AND u.is_deleted = FALSE
-    ORDER BY u.registered_on DESC;
+        AND (p_cursor IS NULL OR u.id > p_cursor)
+    
+    ORDER BY u.registered_on DESC
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
 

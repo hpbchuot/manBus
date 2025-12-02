@@ -1,14 +1,3 @@
--- ============================================================================
--- USERS.SQL - User Management Functions
--- ============================================================================
--- Description: Functions for user CRUD operations, authentication, and profile management
--- Dependencies: Users table, utilities.sql (validation functions)
--- ============================================================================
-
--- ============================================================================
--- USER CREATION
--- ============================================================================
-
 -- Function: fn_create_user
 -- Description: Creates a new user with validation and auto-generated fields
 -- Parameters:
@@ -94,10 +83,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- USER AUTHENTICATION
--- ============================================================================
-
 -- Function: fn_verify_user_password
 -- Description: Verifies a user's password
 -- Parameters:
@@ -140,10 +125,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- USER UPDATE
--- ============================================================================
 
 -- Function: fn_update_user_profile
 -- Description: Updates user profile information
@@ -202,11 +183,7 @@ EXCEPTION
     WHEN unique_violation THEN
         RAISE EXCEPTION 'Email, username, or phone already exists';
 END;
-$$ LANGUAGE plpgsql;
-
--- ============================================================================
--- PASSWORD MANAGEMENT
--- ============================================================================
+$$ LANGUAGE plpgsql STABLE;
 
 -- Function: fn_change_user_password
 -- Description: Changes a user's password
@@ -253,9 +230,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- SOFT DELETE
--- ============================================================================
 
 -- Function: fn_soft_delete_user
 -- Description: Soft deletes a user (sets is_deleted flag)
@@ -296,11 +270,7 @@ BEGIN
     RAISE NOTICE 'User % soft deleted successfully', p_user_id;
     RETURN TRUE;
 END;
-$$ LANGUAGE plpgsql;
-
--- ============================================================================
--- RESTORE USER
--- ============================================================================
+$$ LANGUAGE plpgsql STABLE;
 
 -- Function: fn_restore_user
 -- Description: Restores a soft-deleted user
@@ -337,16 +307,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- USER QUERIES
--- ============================================================================
-
 -- Function: fn_get_active_users
 -- Description: Returns all active (non-deleted) users
 -- Returns: TABLE with user information
--- Usage: SELECT * FROM fn_get_active_users();
+-- Usage: SELECT * FROM fn_get_active_users(NULL, 20);
 DROP FUNCTION IF EXISTS fn_get_active_users;
-CREATE OR REPLACE FUNCTION fn_get_active_users()
+CREATE OR REPLACE FUNCTION fn_get_active_users(
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 20
+)
 RETURNS TABLE (
     id INT,
     name VARCHAR(100),
@@ -368,22 +337,25 @@ BEGIN
         u.registered_on
     FROM Users u
     WHERE u.is_deleted = FALSE
-    ORDER BY u.registered_on DESC;
+        AND (p_cursor IS NULL OR u.id > p_cursor)
+    ORDER BY u.registered_on DESC
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- USER SEARCH
--- ============================================================================
 
 -- Function: fn_search_users
 -- Description: Searches users by name, email, username, or phone
 -- Parameters:
 --   search_term: Search string (case-insensitive)
 -- Returns: TABLE with matching user information
--- Usage: SELECT * FROM fn_search_users('john');
+-- Usage: SELECT * FROM fn_search_users('john', NULL, 10);
 DROP FUNCTION IF EXISTS fn_search_users;
-CREATE OR REPLACE FUNCTION fn_search_users(search_term TEXT)
+CREATE OR REPLACE FUNCTION fn_search_users(
+    search_term TEXT,
+    p_cursor INT DEFAULT NULL,
+    p_limit INT DEFAULT 10
+
+)
 RETURNS TABLE (
     id INT,
     name VARCHAR(100),
@@ -414,14 +386,11 @@ BEGIN
             OR u.email ILIKE '%' || search_term || '%'
             OR u.username ILIKE '%' || search_term || '%'
             OR u.phone LIKE '%' || search_term || '%'
-        )
-    ORDER BY u.registered_on DESC;
+        ) AND (p_cursor IS NULL OR u.id > p_cursor)
+    ORDER BY u.registered_on DESC
+    LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET USER BY PUBLIC ID
--- ============================================================================
 
 -- Function: fn_get_user_by_public_id
 -- Description: Retrieves a user by their public_id
@@ -456,9 +425,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET USER BY ID
--- ============================================================================
 -- Function: fn_get_user_by_id
 -- Description: Retrieves a user by their internal ID
 -- Parameters:
@@ -491,11 +457,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
--- ============================================================================
--- GET USER COUNT
--- ============================================================================
-
 -- Function: fn_get_user_count
 -- Description: Returns count of active users
 -- Returns: INT - Number of active users
@@ -514,10 +475,6 @@ BEGIN
     RETURN user_count;
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET ALL USERS (ADMIN ONLY - CURSOR-BASED PAGINATION)
--- ============================================================================
 
 -- Function: fn_get_all_users
 -- Description: Returns all users with cursor-based pagination (admin only)
@@ -594,10 +551,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
-
--- ===========================================================================
--- fn_get_user_by_email
--- ===========================================================================
 -- Function: fn_get_user_by_email
 -- Description: Retrieves a user by their email address
 -- Parameters:
@@ -631,9 +584,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ===========================================================================
--- fn_get_user_by_username
--- ===========================================================================
 -- Function: fn_get_user_by_username
 -- Description: Retrieves a user by their username
 -- Parameters:

@@ -1,14 +1,3 @@
--- ============================================================================
--- BUSES.SQL - Bus Fleet Management Functions
--- ============================================================================
--- Description: Functions for managing buses, tracking locations, and fleet operations
--- Dependencies: Buses, Routes tables, PostGIS extension, utilities.sql
--- ============================================================================
-
--- ============================================================================
--- BUS CREATION
--- ============================================================================
-
 -- Function: fn_create_bus
 -- Description: Creates a new bus with validation
 -- Parameters:
@@ -19,6 +8,7 @@
 --   p_status: Bus status (default 'Active')
 -- Returns: INT - New bus ID
 -- Usage: SELECT fn_create_bus('29A-12345', 'Bus 101', 1, 'Hyundai Universe', 'Active');
+DROP FUNCTION IF EXISTS fn_create_bus;
 CREATE OR REPLACE FUNCTION fn_create_bus(
     p_plate_number VARCHAR(20),
     p_name VARCHAR(100),
@@ -62,10 +52,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- BUS LOCATION UPDATE
--- ============================================================================
-
 -- Function: fn_update_bus_location
 -- Description: Updates bus current location
 -- Parameters:
@@ -74,6 +60,7 @@ $$ LANGUAGE plpgsql;
 --   p_lon: Longitude
 -- Returns: BOOLEAN - TRUE if successful
 -- Usage: SELECT fn_update_bus_location(1, 10.8231, 106.6297);
+DROP FUNCTION IF EXISTS fn_update_bus_location;
 CREATE OR REPLACE FUNCTION fn_update_bus_location(
     p_bus_id INT,
     p_lat DOUBLE PRECISION,
@@ -101,10 +88,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- BUS STATUS UPDATE
--- ============================================================================
 
 -- Function: fn_update_bus_status
 -- Description: Updates bus status with validation
@@ -137,10 +120,6 @@ BEGIN
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
-
--- ============================================================================
--- BUS ROUTE ASSIGNMENT
--- ============================================================================
 
 -- Function: fn_assign_bus_to_route
 -- Description: Assigns or reassigns a bus to a different route
@@ -181,14 +160,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ============================================================================
--- GET BUSES ON ROUTE
--- ============================================================================
-
 -- Function: fn_get_buses_on_route
 -- Description: Returns all buses assigned to a route
 -- Parameters:
 --   p_route_id: Route ID
+--   p_cursor: Pagination cursor (default NULL)
+--   p_page_size: Number of records per page (default 5)
 -- Returns: TABLE with bus information
 -- Usage: SELECT * FROM fn_get_buses_on_route(1);
 DROP FUNCTION IF EXISTS fn_get_buses_on_route;
@@ -218,9 +195,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- FIND NEAREST BUS
--- ============================================================================
 
 -- Function: fn_find_nearest_bus
 -- Description: Finds the nearest bus to a location
@@ -275,10 +249,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- CHECK IF BUS IS ON ROUTE
--- ============================================================================
-
 -- Function: fn_is_bus_on_route
 -- Description: Checks if bus location is within tolerance of assigned route
 -- Parameters:
@@ -327,18 +297,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ALL BUSES
--- ============================================================================
-
 -- Function: fn_get_all_buses
 -- Description: Returns all buses with route information
 -- Parameters:
+--   p_cursor: Pagination cursor (default NULL)
+--   p_page_size: Number of records per page (default 10)
 --   p_include_inactive: Include inactive/maintenance/retired buses (default FALSE)
 -- Returns: TABLE with bus information
--- Usage: SELECT * FROM fn_get_all_buses(FALSE);
+-- Usage: SELECT * FROM fn_get_all_buses(NULL, 10, FALSE);
 DROP FUNCTION IF EXISTS fn_get_all_buses;
-CREATE OR REPLACE FUNCTION fn_get_all_buses(p_include_inactive BOOLEAN DEFAULT FALSE)
+CREATE OR REPLACE FUNCTION fn_get_all_buses(
+    p_cursor INT DEFAULT NULL,
+    p_page_size INT DEFAULT 10,
+    p_include_inactive BOOLEAN DEFAULT FALSE
+)
 RETURNS TABLE (
     bus_id INT,
     plate_number VARCHAR(20),
@@ -351,6 +323,7 @@ RETURNS TABLE (
     current_longitude DOUBLE PRECISION
 ) AS $$
 BEGIN
+
     RETURN QUERY
     SELECT
         b.bus_id,
@@ -364,14 +337,13 @@ BEGIN
         CASE WHEN b.current_location IS NOT NULL THEN ST_X(b.current_location) ELSE NULL END AS current_longitude
     FROM Buses b
     INNER JOIN Routes r ON b.route_id = r.id
-    WHERE p_include_inactive OR b.status = 'Active'
-    ORDER BY b.name;
+    WHERE (p_include_inactive OR b.status = 'Active') AND
+          (p_cursor IS NULL OR b.bus_id > p_cursor)
+    ORDER BY b.name
+    LIMIT p_page_size;
+    
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET BUS BY PLATE NUMBER
--- ============================================================================
 
 -- Function: fn_get_bus_by_plate
 -- Description: Retrieves bus information by plate number
@@ -409,10 +381,6 @@ BEGIN
     WHERE UPPER(b.plate_number) = UPPER(TRIM(p_plate_number));
 END;
 $$ LANGUAGE plpgsql STABLE;
-
--- ============================================================================
--- GET BUS LOCATION DETAILS
--- ============================================================================
 
 -- Function: fn_get_bus_location_details
 -- Description: Gets detailed location information for a bus
@@ -475,10 +443,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- GET ACTIVE BUSES COUNT
--- ============================================================================
-
 -- Function: fn_get_active_buses_count
 -- Description: Returns count of active buses
 -- Returns: INT - Number of active buses
@@ -498,40 +462,275 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- ============================================================================
--- EXAMPLES AND TESTING
--- ============================================================================
+-- Function: fn_initialize_bus_positions
+-- Description: Initializes positions for buses without current_location or route_progress
+-- Returns: INT - Count of buses initialized
+-- Usage: SELECT fn_initialize_bus_positions();
+DROP FUNCTION IF EXISTS fn_initialize_bus_positions;
+CREATE OR REPLACE FUNCTION fn_initialize_bus_positions()
+RETURNS INT AS $$
+DECLARE
+    v_bus RECORD;
+    v_first_stop_location GEOMETRY;
+    v_route_geom GEOMETRY;
+    v_progress DOUBLE PRECISION;
+    initialized_count INT := 0;
+BEGIN
+    -- Loop through buses that need initialization
+    FOR v_bus IN
+        SELECT bus_id, route_id
+        FROM Buses
+        WHERE current_location IS NULL OR route_progress IS NULL
+    LOOP
+        -- Get route geometry
+        SELECT route_geom INTO v_route_geom
+        FROM Routes
+        WHERE id = v_bus.route_id;
 
--- Example usage:
--- Create a bus:
--- SELECT fn_create_bus('29A-12345', 'Bus 101', 1, 'Hyundai Universe', 'Active');
+        IF v_route_geom IS NULL THEN
+            RAISE NOTICE 'Bus % has route % with no geometry, skipping', v_bus.bus_id, v_bus.route_id;
+            CONTINUE;
+        END IF;
 
--- Update bus location:
--- SELECT fn_update_bus_location(1, 10.8231, 106.6297);
+        -- Get first stop on route
+        SELECT s.location INTO v_first_stop_location
+        FROM Stops s
+        INNER JOIN RouteStops rs ON s.id = rs.stop_id
+        WHERE rs.route_id = v_bus.route_id
+        ORDER BY rs.stop_sequence ASC
+        LIMIT 1;
 
--- Update bus status:
--- SELECT fn_update_bus_status(1, 'Maintenance');
+        -- If no stops, start at beginning of route
+        IF v_first_stop_location IS NULL THEN
+            v_first_stop_location := ST_StartPoint(v_route_geom);
+            v_progress := 0.0;
+        ELSE
+            -- Calculate progress along route for first stop
+            v_progress := ST_LineLocatePoint(v_route_geom, v_first_stop_location);
+        END IF;
 
--- Assign bus to route:
--- SELECT fn_assign_bus_to_route(1, 2);
+        -- Update bus with initial position
+        UPDATE Buses
+        SET current_location = v_first_stop_location,
+            route_progress = v_progress,
+            direction = 1,
+            last_updated = NOW()
+        WHERE bus_id = v_bus.bus_id;
 
--- Get buses on route:
--- SELECT * FROM fn_get_buses_on_route(1);
+        initialized_count := initialized_count + 1;
+        RAISE NOTICE 'Initialized bus % at progress %', v_bus.bus_id, v_progress;
+    END LOOP;
 
--- Find nearest bus:
--- SELECT * FROM fn_find_nearest_bus(10.8231, 106.6297, NULL, 5);
+    RAISE NOTICE 'Initialized % buses', initialized_count;
+    RETURN initialized_count;
+END;
+$$ LANGUAGE plpgsql;
 
--- Check if bus is on route:
--- SELECT fn_is_bus_on_route(1, 100);
 
--- Get all buses:
--- SELECT * FROM fn_get_all_buses(FALSE);
+-- Function: fn_snap_bus_to_route
+-- Description: Snaps an off-route bus back to the nearest point on its assigned route
+-- Parameters:
+--   p_bus_id: Bus ID
+-- Returns: BOOLEAN - TRUE if successful
+-- Usage: SELECT fn_snap_bus_to_route(1);
+DROP FUNCTION IF EXISTS fn_snap_bus_to_route;
+CREATE OR REPLACE FUNCTION fn_snap_bus_to_route(p_bus_id INT)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_current_location GEOMETRY;
+    v_route_geom GEOMETRY;
+    v_closest_point GEOMETRY;
+    v_progress DOUBLE PRECISION;
+BEGIN
+    -- Get bus location and route geometry
+    SELECT b.current_location, r.route_geom
+    INTO v_current_location, v_route_geom
+    FROM Buses b
+    INNER JOIN Routes r ON b.route_id = r.id
+    WHERE b.bus_id = p_bus_id;
 
--- Get bus by plate number:
--- SELECT * FROM fn_get_bus_by_plate('29A-12345');
+    IF v_current_location IS NULL THEN
+        RAISE EXCEPTION 'Bus % has no current location', p_bus_id;
+    END IF;
 
--- Get bus location details:
--- SELECT * FROM fn_get_bus_location_details(1);
+    IF v_route_geom IS NULL THEN
+        RAISE EXCEPTION 'Bus % route has no geometry', p_bus_id;
+    END IF;
 
--- Get active buses count:
--- SELECT fn_get_active_buses_count();
+    -- Find closest point on route
+    v_closest_point := ST_ClosestPoint(v_route_geom, v_current_location);
+
+    -- Calculate progress along route
+    v_progress := ST_LineLocatePoint(v_route_geom, v_closest_point);
+
+    -- Update bus position
+    UPDATE Buses
+    SET current_location = v_closest_point,
+        route_progress = v_progress,
+        last_updated = NOW()
+    WHERE bus_id = p_bus_id;
+
+    RAISE NOTICE 'Snapped bus % to route at progress %', p_bus_id, v_progress;
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: fn_update_bus_positions_auto
+-- Description: Moves all active buses along their routes by one step
+-- Parameters:
+--   p_speed_meters_per_second: Bus speed in m/s (default 10.0 = 36 km/h)
+--   p_time_step_seconds: Time elapsed since last update (default 30 seconds)
+-- Returns: TABLE with update results
+-- Usage: SELECT * FROM fn_update_bus_positions_auto(10.0, 30);
+DROP FUNCTION IF EXISTS fn_update_bus_positions_auto;
+CREATE OR REPLACE FUNCTION fn_update_bus_positions_auto(
+    p_speed_meters_per_second DOUBLE PRECISION DEFAULT 10.0,
+    p_time_step_seconds INT DEFAULT 30
+)
+RETURNS TABLE (
+    bus_id INT,
+    updated BOOLEAN,
+    new_progress DOUBLE PRECISION,
+    new_latitude DOUBLE PRECISION,
+    new_longitude DOUBLE PRECISION
+) AS $$
+DECLARE
+    v_bus RECORD;
+    v_route_length DOUBLE PRECISION;
+    v_distance_to_move DOUBLE PRECISION;
+    v_progress_delta DOUBLE PRECISION;
+    v_new_progress DOUBLE PRECISION;
+    v_new_location GEOMETRY;
+    v_new_direction INT;
+BEGIN
+    -- Calculate distance to move
+    v_distance_to_move := p_speed_meters_per_second * p_time_step_seconds;
+
+    -- Loop through all active buses
+    FOR v_bus IN
+        SELECT b.bus_id, b.route_id, b.current_location, b.route_progress,
+               b.direction, r.route_geom
+        FROM Buses b
+        INNER JOIN Routes r ON b.route_id = r.id
+        WHERE b.status = 'Active' AND r.route_geom IS NOT NULL
+    LOOP
+        BEGIN
+            -- Calculate route length in meters
+            v_route_length := ST_Length(v_bus.route_geom::geography);
+
+            -- Skip if route has no length
+            IF v_route_length = 0 OR v_route_length IS NULL THEN
+                RAISE NOTICE 'Bus % route has zero length, skipping', v_bus.bus_id;
+                CONTINUE;
+            END IF;
+
+            -- Initialize progress if NULL
+            IF v_bus.route_progress IS NULL THEN
+                IF v_bus.current_location IS NULL THEN
+                    v_bus.route_progress := 0.0;
+                    v_bus.current_location := ST_StartPoint(v_bus.route_geom);
+                ELSE
+                    v_bus.route_progress := ST_LineLocatePoint(v_bus.route_geom, v_bus.current_location);
+                END IF;
+                v_bus.direction := 1;
+            END IF;
+
+            -- Calculate progress delta (fraction of route)
+            v_progress_delta := v_distance_to_move / v_route_length;
+
+            -- Calculate new progress based on direction
+            v_new_progress := v_bus.route_progress + (v_progress_delta * v_bus.direction);
+            v_new_direction := v_bus.direction;
+
+            -- Handle route endpoints (reverse direction)
+            IF v_new_progress >= 1.0 THEN
+                v_new_progress := 2.0 - v_new_progress; -- Bounce back
+                v_new_direction := -1;
+                IF v_new_progress < 0 THEN
+                    v_new_progress := 0.01;
+                END IF;
+            ELSIF v_new_progress <= 0.0 THEN
+                v_new_progress := ABS(v_new_progress); -- Bounce back
+                v_new_direction := 1;
+                IF v_new_progress > 1.0 THEN
+                    v_new_progress := 0.99;
+                END IF;
+            END IF;
+
+            -- Clamp progress to valid range
+            v_new_progress := GREATEST(0.0, LEAST(1.0, v_new_progress));
+
+            -- Get new location point on route
+            v_new_location := ST_LineInterpolatePoint(v_bus.route_geom, v_new_progress);
+
+            -- Update bus position
+            UPDATE Buses
+            SET current_location = v_new_location,
+                route_progress = v_new_progress,
+                direction = v_new_direction,
+                last_updated = NOW()
+            WHERE Buses.bus_id = v_bus.bus_id;
+
+            -- Return result
+            bus_id := v_bus.bus_id;
+            updated := TRUE;
+            new_progress := v_new_progress;
+            new_latitude := ST_Y(v_new_location);
+            new_longitude := ST_X(v_new_location);
+            RETURN NEXT;
+
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Error updating bus %: %', v_bus.bus_id, SQLERRM;
+            bus_id := v_bus.bus_id;
+            updated := FALSE;
+            new_progress := NULL;
+            new_latitude := NULL;
+            new_longitude := NULL;
+            RETURN NEXT;
+        END;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: fn_get_bus_by_id
+-- Description: Retrieves detailed bus information by bus ID with location as GeoJSON
+-- Parameters:
+--   p_bus_id: Bus ID
+-- Returns: TABLE with bus information and location as GeoJSON
+-- Usage: SELECT * FROM fn_get_bus_by_id(1);
+DROP FUNCTION IF EXISTS fn_get_bus_by_id;
+CREATE OR REPLACE FUNCTION fn_get_bus_by_id(p_bus_id INT)
+RETURNS TABLE (
+    bus_id INT,
+    plate_number VARCHAR(20),
+    name VARCHAR(100),
+    model VARCHAR(50),
+    status bus_status,
+    route_id INT,
+    route_name VARCHAR(100),
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION,
+    route_progress DOUBLE PRECISION,
+    direction INT,
+    last_updated TIMESTAMP
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        b.bus_id,
+        b.plate_number,
+        b.name,
+        b.model,
+        b.status,
+        b.route_id,
+        r.name AS route_name,
+        CASE WHEN b.current_location IS NOT NULL THEN ST_Y(b.current_location) ELSE NULL END AS current_latitude,
+        CASE WHEN b.current_location IS NOT NULL THEN ST_X(b.current_location) ELSE NULL END AS current_longitude,
+        b.route_progress,
+        b.direction,
+        b.last_updated
+    FROM Buses b
+    INNER JOIN Routes r ON b.route_id = r.id
+    WHERE b.bus_id = p_bus_id;
+END;
+$$ LANGUAGE plpgsql STABLE;
