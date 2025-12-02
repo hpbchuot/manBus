@@ -72,11 +72,11 @@ class BusService(IBusService):
         entity_dict = self.repository.get_by_id(bus_id)
         if not entity_dict:
             return None
-
+        
         # Convert to detail response with route info
-        return BusDetailResponse(**entity_dict) if entity_dict else None
+        return BusDetailResponse(**entity_dict)
 
-    def get_by_plate_number(self, plate_number: str) -> Optional[BusResponse]:
+    def get_by_plate_number(self, plate_number: str) -> Optional[BusDetailResponse]:
         """
         Get bus by plate number.
 
@@ -84,22 +84,26 @@ class BusService(IBusService):
             plate_number: Vehicle plate number
 
         Returns:
-            BusResponse or None if not found
+            BusDetailResponse or None if not found
         """
         entity_dict = self.repository.get_by_plate_number(plate_number)
-        return BusResponse(**entity_dict) if entity_dict else None
+        return BusDetailResponse(**entity_dict) if entity_dict else None
 
-    def get_all_active(self) -> List[BusResponse]:
+    def get_all_active(self, cursor: Optional[int] = None, limit: Optional[int] = 10) -> List[BusResponse]:
         """
         Get all active buses.
 
         Returns:
             List of active buses
         """
-        entities = self.repository.get_active_buses()
+        entities = self.repository.get_active_buses(cursor, limit)
         return [BusResponse(**e) for e in entities]
 
-    def get_all(self, include_inactive: bool = False) -> List[BusResponse]:
+    def get_all(
+            self, 
+            cursor: Optional[int] = None,
+            limit: Optional[int] = 10,
+            include_inactive: bool = False) -> List[BusResponse]:
         """
         Get all buses.
 
@@ -109,7 +113,7 @@ class BusService(IBusService):
         Returns:
             List of buses
         """
-        entities = self.repository.get_all(include_inactive=include_inactive)
+        entities = self.repository.get_all(cursor, limit, include_inactive)
         return [BusResponse(**e) for e in entities]
 
     def create(self, bus_data: BusCreate) -> Optional[BusResponse]:

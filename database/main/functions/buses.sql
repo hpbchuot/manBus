@@ -691,3 +691,46 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Function: fn_get_bus_by_id
+-- Description: Retrieves detailed bus information by bus ID with location as GeoJSON
+-- Parameters:
+--   p_bus_id: Bus ID
+-- Returns: TABLE with bus information and location as GeoJSON
+-- Usage: SELECT * FROM fn_get_bus_by_id(1);
+DROP FUNCTION IF EXISTS fn_get_bus_by_id;
+CREATE OR REPLACE FUNCTION fn_get_bus_by_id(p_bus_id INT)
+RETURNS TABLE (
+    bus_id INT,
+    plate_number VARCHAR(20),
+    name VARCHAR(100),
+    model VARCHAR(50),
+    status bus_status,
+    route_id INT,
+    route_name VARCHAR(100),
+    current_latitude DOUBLE PRECISION,
+    current_longitude DOUBLE PRECISION,
+    route_progress DOUBLE PRECISION,
+    direction INT,
+    last_updated TIMESTAMP
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        b.bus_id,
+        b.plate_number,
+        b.name,
+        b.model,
+        b.status,
+        b.route_id,
+        r.name AS route_name,
+        CASE WHEN b.current_location IS NOT NULL THEN ST_Y(b.current_location) ELSE NULL END AS current_latitude,
+        CASE WHEN b.current_location IS NOT NULL THEN ST_X(b.current_location) ELSE NULL END AS current_longitude,
+        b.route_progress,
+        b.direction,
+        b.last_updated
+    FROM Buses b
+    INNER JOIN Routes r ON b.route_id = r.id
+    WHERE b.bus_id = p_bus_id;
+END;
+$$ LANGUAGE plpgsql STABLE;

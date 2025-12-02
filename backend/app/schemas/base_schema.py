@@ -120,8 +120,10 @@ class SuccessResponse(BaseModel, Generic[T]):
 
 
 # Coordinate/Location schemas
-class PointSchema(BaseSchema):
+class PointSchema(BaseSchema): 
+    # {'type': 'Point', 'coordinates': [105.769366817, 20.966372011]}
     """Schema for geographic point (longitude, latitude)"""
+    
     longitude: float = Field(..., ge=-180, le=180, description="Longitude coordinate")
     latitude: float = Field(..., ge=-90, le=90, description="Latitude coordinate")
 

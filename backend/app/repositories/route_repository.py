@@ -66,15 +66,15 @@ class RouteRepository(BaseRepository):
         query = 'SELECT * FROM fn_get_route_by_name(%s)'
         return self._execute_query(query, (route_name,), fetch_one=True)
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, cursor: Optional[int] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get all routes using PostgreSQL function.
 
         Returns:
             List of route dicts with stop count and length
         """
-        query = 'SELECT * FROM fn_get_all_routes()'
-        return self._execute_query(query, (), fetch_one=False)
+        query = 'SELECT * FROM fn_get_all_routes(%s, %s)'
+        return self._execute_query(query, (cursor, limit), fetch_one=False)
 
     def get_stops_on_route(self, route_id: int) -> List[Dict[str, Any]]:
         """

@@ -90,14 +90,14 @@ class RouteService:
         """
         return self.repository.get_by_name(route_name)
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, cursor: Optional[int] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get all routes with stop count and length.
 
         Returns:
             List of route dicts
         """
-        return self.repository.get_all()
+        return self.repository.get_all(cursor, limit)
 
     def get_stops_on_route(self, route_id: int) -> List[Dict[str, Any]]:
         """

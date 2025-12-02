@@ -122,10 +122,21 @@ def get_route_by_name(route_name):
 def get_all_routes():
     """Get all routes with stop count and length."""
     try:
+        cursor = request.args.get('cursor', type=int) or None
+        limit = request.args.get('limit', 10, type=int)
         route_service = get_route_service()
-        routes = route_service.get_all()
+        routes = route_service.get_all(cursor, limit+1)
+        
+        has_next = len(routes) > limit
+        next_cursor = routes[-1]['route_id'] if has_next else None
 
-        return ErrorResponse.success(data=routes)
+        return ErrorResponse.success(
+            data={
+                'routes': routes[:limit],
+                'next_cursor': next_cursor,
+                'has_next': has_next
+            }
+        )
 
     except Exception as e:
         logger.error(f"Failed to get all routes: {str(e)}", exc_info=True)

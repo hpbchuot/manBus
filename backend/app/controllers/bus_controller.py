@@ -79,7 +79,7 @@ def create_bus(current_user):
         return ErrorResponse.error(f'Bus creation failed: {str(e)}')
 
 
-@bus_api.route('/<int:bus_id>', methods=['GET'])
+@bus_api.route('/by/<int:bus_id>', methods=['GET'])
 def get_bus(bus_id):
     """
     Get bus by ID with route information.
@@ -104,7 +104,7 @@ def get_bus(bus_id):
 
     except Exception as e:
         logger.error(f"Failed to get bus {bus_id}: {str(e)}", exc_info=True)
-        return ErrorResponse.error(f'Failed to get bus: {str(e)}')
+        return ErrorResponse.error(f'Failed to get bus by id: {str(e)}')
 
 
 @bus_api.route('/plate/<string:plate_number>', methods=['GET'])
@@ -132,7 +132,7 @@ def get_bus_by_plate(plate_number):
 
     except Exception as e:
         logger.error(f"Failed to get bus by plate: {str(e)}", exc_info=True)
-        return ErrorResponse.error(f'Failed to get bus: {str(e)}')
+        return ErrorResponse.error(f'Failed to get bus by plate: {str(e)}')
 
 
 @bus_api.route('/active', methods=['GET'])
@@ -146,9 +146,19 @@ def get_active_buses():
     """
     try:
         bus_service = get_bus_service()
-        buses = bus_service.get_all_active()
+        cursor = request.args.get('cursor', type=int) or None
+        limit = request.args.get('limit', 10, type=int)
+        buses = bus_service.get_all_active(cursor, limit+1)
 
-        return ErrorResponse.success(data=[bus.model_dump() for bus in buses])
+        has_next = len(buses) > limit
+        next_cursor = buses[-1].bus_id if has_next else None
+        return ErrorResponse.success(
+            data={
+                'buses': [bus.model_dump() for bus in buses[:-1]] if has_next else [bus.model_dump() for bus in buses],
+                'next_cursor': next_cursor,
+                'has_next': has_next
+            }
+        )
 
     except Exception as e:
         logger.error(f"Failed to get active buses: {str(e)}", exc_info=True)
@@ -168,12 +178,21 @@ def get_all_buses():
         500: Internal server error
     """
     try:
+        cursor = request.args.get('cursor', type=int) or None
+        limit = request.args.get('limit', 10, type=int)
         include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
 
         bus_service = get_bus_service()
-        buses = bus_service.get_all(include_inactive=include_inactive)
-
-        return ErrorResponse.success(data=[bus.model_dump() for bus in buses])
+        buses = bus_service.get_all(cursor, limit+1, include_inactive)
+        has_next = len(buses) > limit
+        next_cursor = buses[-1].bus_id if has_next else None
+        return ErrorResponse.success(
+            data={
+                'buses': [bus.model_dump() for bus in buses[:-1]] if has_next else [bus.model_dump() for bus in buses],
+                'next_cursor': next_cursor,
+                'has_next': has_next
+            }
+        )
 
     except Exception as e:
         logger.error(f"Failed to get all buses: {str(e)}", exc_info=True)
