@@ -232,20 +232,22 @@ class UserSearchService:
 
     def search_users(
         self,
-        query: str
+        query: str,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = 10
     ) -> List[Dict[str, Any]]:
         """
         Search users with filters.
-
         Args:
             search_params: Search parameters
-
+            cursor: Optional cursor for pagination (user ID from last result)
+            limit: Optional limit for number of users
         Returns:
             List of UserResponse
         """
         try:
             # Perform search via repository
-            user_dicts = self.user_repo.search(query)
+            user_dicts = self.user_repo.search(query, cursor, limit)
             return user_dicts
         except Exception as e:
             logger.error(f"Error searching users: {e}")
@@ -257,7 +259,7 @@ class UserSearchService:
         limit: Optional[int] = None,
         role: Optional[str] = None,
         include_deleted: bool = False,
-    ) -> List[UserResponse]:
+    ) -> List[Dict[str, Any]]:
         """
         Get all users with cursor-based pagination.
 
@@ -273,12 +275,7 @@ class UserSearchService:
         try:
             user_dicts = self.user_repo.get_all(cursor, limit, role, include_deleted)
 
-            users = []
-            for user_dict in user_dicts:
-                user_data = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-                users.append(UserResponse(**user_data))
-
-            return users
+            return user_dicts
 
         except Exception as e:
             logger.error(f"Error getting all users: {e}")
@@ -471,9 +468,11 @@ class UserService:
     # === Search Operations (delegate to UserSearchService) ===
     def search_users(
         self,
-        query: str
+        query: str,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = 10,
     ) -> List[Dict[str, Any]]:
-        return self._search.search_users(query)
+        return self._search.search_users(query, cursor, limit)
 
     def get_all_users(
         self,
@@ -481,7 +480,7 @@ class UserService:
         limit: Optional[int] = None,
         role: Optional[str] = None,
         include_deleted: bool = False,
-    ) -> List[UserResponse]:
+    ) -> List[Dict[str, Any]]:
         return self._search.get_all_users(cursor, limit, role, include_deleted)
 
     # === Lookup Operations (delegate to UserLookupService) ===

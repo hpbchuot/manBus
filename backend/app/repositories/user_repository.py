@@ -211,7 +211,9 @@ class UserSearchRepository:
 
     def search(
         self,
-        query: Optional[str] = None
+        query: Optional[str] = None,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = 10
     ) -> List[Dict[str, Any]]:
         """
         Search users using fn_search_users function.
@@ -222,8 +224,8 @@ class UserSearchRepository:
         Returns:
             List of RealDictRow with user data
         """
-        sql = 'SELECT * FROM fn_search_users(%s)'
-        results = self._db.fetch_all(sql, (query,))
+        sql = 'SELECT * FROM fn_search_users(%s, %s, %s)'
+        results = self._db.fetch_all(sql, (query, cursor, limit))
         return [dict(row) for row in results] if results else []
 
     def get_all(
@@ -247,7 +249,7 @@ class UserSearchRepository:
         """
         query = 'SELECT * FROM fn_get_all_users(%s, %s, %s::roles, %s)'
         results = self._db.fetch_all(query, (cursor, limit, role, include_deleted))
-        return [dict(row) for row in results] if results else []
+        return results if results else []
 
     def count(
         self,
@@ -443,7 +445,9 @@ class UserRepository:
     # === Search Operations (delegate to UserSearchRepository) ===
     def search(
         self,
-        query: Optional[str] = None
+        query: Optional[str] = None,
+        cursor: Optional[int] = None,
+        limit: Optional[int] = 10,
     ) -> List[Dict[str, Any]]:
         return self._search.search(query)
 
