@@ -21,7 +21,7 @@ export interface IRouteService {
   // Read operations
   getRouteById(routeId: number): Promise<Route>;
   getRouteByName(routeName: string): Promise<Route>;
-  getAllRoutes(): Promise<Route[]>;
+  getAllRoutes(cursor?: number, limit?: number): Promise<{ routes: Route[]; next_cursor: number | null; has_next: boolean }>;
   getRouteStops(routeId: number): Promise<RouteStop[]>;
   getRouteLength(routeId: number): Promise<number>;
   getRouteGeoJSON(routeId: number): Promise<RouteGeoJSON>;
@@ -80,9 +80,23 @@ export class RouteService implements IRouteService {
     return this.adapter.toRoute(response.data);
   }
 
-  async getAllRoutes(): Promise<Route[]> {
-    const response = await this.http.get<ApiResponse<RouteDTO[]>>('/routes/');
-    return response.data.map((dto) => this.adapter.toRoute(dto));
+  async getAllRoutes(cursor?: number, limit: number = 10): Promise<{ routes: Route[]; next_cursor: number | null; has_next: boolean }> {
+    const response = await this.http.get<ApiResponse<{
+      routes: RouteDTO[];
+      next_cursor: number | null;
+      has_next: boolean;
+    }>>('/routes/', {
+      params: {
+        cursor,
+        limit,
+      },
+    });
+
+    return {
+      routes: response.data.routes.map((dto) => this.adapter.toRoute(dto)),
+      next_cursor: response.data.next_cursor,
+      has_next: response.data.has_next,
+    };
   }
 
   async getRouteStops(routeId: number): Promise<RouteStop[]> {

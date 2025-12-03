@@ -17,7 +17,6 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import type { NearestStop } from '@/types/stop';
 import { StopService } from '@/services/api/stopApi';
-import { StopAdapter } from '@/services/adapters/stopAdapter';
 import api from '@/services/api';
 import { toast } from 'react-toastify';
 
@@ -30,8 +29,7 @@ const NearestStopsPanel: React.FC<NearestStopsPanelProps> = ({ onStopSelect }) =
   const [loading, setLoading] = useState(false);
   // const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  const stopAdapter = new StopAdapter();
-  const stopService = new StopService(api, stopAdapter);
+  const stopService = new StopService(api);
 
   const handleFindNearestStops = () => {
     if (!navigator.geolocation) {

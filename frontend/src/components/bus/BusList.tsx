@@ -36,11 +36,11 @@ const BusList: React.FC<BusListProps> = ({ onBusSelect, selectedBusId }) => {
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  const { data: buses = [], isLoading, isError, error } = useActiveBuses();
+  const { data: buses, isLoading, isError, error } = useActiveBuses();
   const { data: routes = [] } = useAllRoutes();
 
   const filteredBuses = useMemo(() => {
-    let filtered = [...buses];
+    let filtered = [...(buses?.buses || [])];
 
     // Filter by search query
     if (debouncedSearch.trim()) {

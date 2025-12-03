@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '@/services/api';
 import { StopService } from '@/services/api/stopApi';
-import { StopAdapter } from '@/services/adapters/stopAdapter';
 import { RouteService } from '@/services/api/routeApi';
 import { RouteAdapter } from '@/services/adapters/routeAdapter';
 import { BusService } from '@/services/api/busApi';
@@ -12,8 +11,7 @@ import type { UpdateBusLocationPayload } from '@/types/bus';
 
 // Khởi tạo Service (Singleton instances)
 // Việc này đảm bảo chúng ta không tạo mới instance mỗi lần render
-const stopAdapter = new StopAdapter();
-const stopService = new StopService(api, stopAdapter);
+const stopService = new StopService(api);
 
 const routeAdapter = new RouteAdapter();
 const routeService = new RouteService(api, routeAdapter);
@@ -27,7 +25,10 @@ const busService = new BusService(api, busAdapter);
 export const useAllStops = () => {
   return useQuery({
     queryKey: ['stops', 'all'],
-    queryFn: () => stopService.getAllStops(),
+    queryFn: async () => {
+      const result = await stopService.getAllStops();
+      return result.stops;
+    },
     staleTime: 1000 * 60 * 5, // Data coi là mới trong 5 phút
   });
 };
@@ -67,7 +68,10 @@ export const useRouteGeometry = (routeId: number) => {
 export const useAllRoutes = () => {
   return useQuery({
     queryKey: ['routes', 'all'],
-    queryFn: () => routeService.getAllRoutes(),
+    queryFn: async () => {
+      const result = await routeService.getAllRoutes();
+      return result.routes;
+    },
     staleTime: 1000 * 60 * 5, // Cache 5 minutes
   });
 };
@@ -108,7 +112,10 @@ export const useActiveBuses = () => {
 export const useAllBuses = (includeInactive: boolean = false) => {
   return useQuery({
     queryKey: ['buses', 'all', includeInactive],
-    queryFn: () => busService.getAllBuses(includeInactive),
+    queryFn: async () => {
+      const result = await busService.getAllBuses(undefined, 100, includeInactive);
+      return result.buses;
+    },
     staleTime: 1000 * 60 * 2,
   });
 };

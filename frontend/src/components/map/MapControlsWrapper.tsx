@@ -64,7 +64,7 @@ const MapControlsWrapper: React.FC<MapControlsWrapperProps> = ({ selectedStop })
   const handleFocusStop = () => {
     if (selectedStop) {
       map.setView(
-        [selectedStop.location.latitude, selectedStop.location.longitude],
+        [selectedStop.latitude, selectedStop.longitude],
         17,
         { animate: true }
       );

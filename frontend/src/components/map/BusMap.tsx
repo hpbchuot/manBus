@@ -60,14 +60,14 @@ const BusMap: React.FC<BusMapProps> = ({
   onRouteClick,
   onBusClick
 }) => {
-  const [layers, setLayers] = useState<string[]>(['stops', 'buses']); // Layers hiển thị
+  const [layers, setLayers] = useState<string[]>([]); // Layers hiển thị - hidden by default
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [selectedStopData, setSelectedStopData] = useState<Stop | null>(null);
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
   const [trackedBusId] = useState<number | null>(null);
 
   // Fetch active buses with auto-refresh every 30 seconds
-  const { data: buses = [] } = useActiveBuses();
+  const { data: buses } = useActiveBuses();
 
   const handleLayerToggle = (
     _event: React.MouseEvent<HTMLElement>,
@@ -151,7 +151,7 @@ const BusMap: React.FC<BusMapProps> = ({
         {/* Bus Layer - Real-time bus positions */}
         {layers.includes('buses') && (
           <BusLayer
-            buses={buses}
+            buses={buses?.buses || []}
             selectedBusId={selectedBusId}
             trackedBusId={trackedBusId}
             onBusClick={handleBusClick}
@@ -159,8 +159,8 @@ const BusMap: React.FC<BusMapProps> = ({
           />
         )}
 
-        {/* Selected Route Polyline */}
-        {layers.includes('routes') && selectedRoute && (
+        {/* Selected Route Polyline - Always show when a route is selected */}
+        {selectedRoute && (
           <RoutePolyline
             route={selectedRoute}
             color="#00C060"

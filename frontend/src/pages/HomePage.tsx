@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Drawer, IconButton, useMediaQuery, useTheme, Tabs, Tab } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -8,6 +8,7 @@ import BusMap from '@/components/map/BusMap';
 import StopsList from '@/components/map/StopsList';
 import BusList from '@/components/bus/BusList';
 import BusInfoPanel from '@/components/bus/BusInfoPanel';
+import { useRoute } from '@/hooks/useBusData';
 import type { Stop } from '@/types/stop';
 import type { Route } from '@/types/route';
 import type { Bus } from '@/types/bus';
@@ -24,9 +25,22 @@ const HomePage: React.FC = () => {
   const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
 
+  // Fetch route data when a bus is selected
+  const { data: routeData } = useRoute(selectedBus?.routeId || 0);
+
+  // Update selectedRoute when route data is fetched
+  useEffect(() => {
+    if (routeData && selectedBus) {
+      setSelectedRoute(routeData);
+    } else if (!selectedBus) {
+      setSelectedRoute(null);
+    }
+  }, [routeData, selectedBus]);
+
   const handleStopSelect = (stop: Stop) => {
     setSelectedStop(stop);
     setSelectedBus(null); // Clear bus selection when stop is selected
+    setSelectedRoute(null); // Clear route when stop is selected
     // TODO: Có thể zoom map đến vị trí stop này
     console.log('Selected stop:', stop);
   };
@@ -64,6 +78,7 @@ const HomePage: React.FC = () => {
     setActiveTab(newValue);
     setSelectedStop(null);
     setSelectedBus(null);
+    setSelectedRoute(null);
   };
 
   return (

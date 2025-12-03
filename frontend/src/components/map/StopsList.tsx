@@ -11,13 +11,13 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
+  Button,
   // Chip,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import type { Stop } from '@/types/stop';
 import { StopService } from '@/services/api/stopApi';
-import { StopAdapter } from '@/services/adapters/stopAdapter';
 import api from '@/services/api';
 
 interface StopsListProps {
@@ -30,10 +30,12 @@ const StopsList: React.FC<StopsListProps> = ({ onStopSelect, selectedStopId }) =
   const [filteredStops, setFilteredStops] = useState<Stop[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [hasNext, setHasNext] = useState(false);
 
-  const stopAdapter = new StopAdapter();
-  const stopService = new StopService(api, stopAdapter);
+  const stopService = new StopService(api);
 
   useEffect(() => {
     loadStops();
@@ -43,18 +45,45 @@ const StopsList: React.FC<StopsListProps> = ({ onStopSelect, selectedStopId }) =
     filterStops();
   }, [searchQuery, stops]);
 
-  const loadStops = async () => {
-    setLoading(true);
+  const loadStops = async (cursor?: number) => {
+    const isLoadingMore = cursor !== undefined;
+
+    if (isLoadingMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
     setError(null);
+
     try {
-      const data = await stopService.getAllStops();
-      setStops(data);
-      setFilteredStops(data);
+      const data = await stopService.getAllStops(cursor, 50);
+
+      if (isLoadingMore) {
+        setStops(prev => [...prev, ...data.stops]);
+      } else {
+        setStops(data.stops);
+      }
+
+      setNextCursor(data.next_cursor);
+      setHasNext(data.has_next);
+      console.log(data);
+
     } catch (err: any) {
       const message = err.response?.data?.message || 'Không thể tải danh sách điểm dừng';
       setError(message);
     } finally {
-      setLoading(false);
+      if (isLoadingMore) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (nextCursor !== null && hasNext && !loadingMore) {
+      loadStops(nextCursor);
     }
   };
 
@@ -184,7 +213,7 @@ const StopsList: React.FC<StopsListProps> = ({ onStopSelect, selectedStopId }) =
                         ID: {stop.id}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {stop.location.latitude.toFixed(5)}, {stop.location.longitude.toFixed(5)}
+                        {stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}
                       </Typography>
                     </Box>
                   }
@@ -194,6 +223,28 @@ const StopsList: React.FC<StopsListProps> = ({ onStopSelect, selectedStopId }) =
           ))
         )}
       </List>
+
+      {/* Load More Button */}
+      {!searchQuery && hasNext && (
+        <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            sx={{ position: 'relative' }}
+          >
+            {loadingMore ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Đang tải...
+              </>
+            ) : (
+              'Tải thêm'
+            )}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 };

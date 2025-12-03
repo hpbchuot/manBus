@@ -5,7 +5,6 @@ import {
   Toolbar,
   Typography,
   IconButton,
-  Drawer,
   CssBaseline,
   useMediaQuery,
   useTheme,
@@ -232,30 +231,7 @@ const MainLayout: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      {/* --- SIDEBAR (DRAWER) --- */}
-      <Drawer
-        variant="persistent"
-        anchor="left"
-        open={open}
-        sx={{
-          width: DRAWER_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: DRAWER_WIDTH,
-            boxSizing: 'border-box',
-            backgroundColor: 'background.default',
-            borderRight: '1px solid rgba(0,0,0,0.05)',
-            top: '64px',
-            height: 'calc(100% - 64px)',
-          },
-        }}
-      >
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle2" color="textSecondary">
-            Sidebar Content
-          </Typography>
-        </Box>
-      </Drawer>
+
 
       {/* --- MAP AREA (MAIN CONTENT) --- */}
       <Box

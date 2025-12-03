@@ -50,7 +50,7 @@ const MapControls: React.FC<MapControlsProps> = ({
   const handleFocusStop = () => {
     if (selectedStop) {
       map.setView(
-        [selectedStop.location.latitude, selectedStop.location.longitude],
+        [selectedStop.latitude, selectedStop.longitude],
         17,
         { animate: true }
       );

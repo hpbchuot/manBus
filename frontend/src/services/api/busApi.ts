@@ -19,8 +19,8 @@ export interface IBusService {
   // Read operations
   getBusById(busId: number): Promise<Bus>;
   getBusByPlateNumber(plateNumber: string): Promise<Bus>;
-  getAllActiveBuses(): Promise<Bus[]>;
-  getAllBuses(includeInactive?: boolean): Promise<Bus[]>;
+  getAllActiveBuses(): Promise<{ buses: Bus[]; hasNext: boolean; nextCursor: number | null }>;
+  getAllBuses(cursor?: number, limit?: number, includeInactive?: boolean): Promise<{ buses: Bus[]; next_cursor: number | null; has_next: boolean }>;
   getBusesByRoute(routeId: number): Promise<Bus[]>;
   findNearestBuses(
     latitude: number,
@@ -55,7 +55,7 @@ export class BusService implements IBusService {
 
   async getBusById(busId: number): Promise<Bus> {
     const response = await this.http.get<ApiResponse<BusDTO>>(
-      `/buses/${busId}`
+      `/buses/by/${busId}`
     );
     return this.adapter.toBus(response.data);
   }
@@ -67,16 +67,33 @@ export class BusService implements IBusService {
     return this.adapter.toBus(response.data);
   }
 
-  async getAllActiveBuses(): Promise<Bus[]> {
-    const response = await this.http.get<ApiResponse<BusDTO[]>>('/buses/active');
-    return response.data.map((dto) => this.adapter.toBus(dto));
+  async getAllActiveBuses(): Promise<{ buses: Bus[]; hasNext: boolean; nextCursor: number | null }> {
+    const response = await this.http.get<ApiResponse<{ buses: BusDTO[]; has_next: boolean; next_cursor: number | null }>>('/buses/active');    
+    return {
+      buses: response.data.buses.map((dto) => this.adapter.toBus(dto)),
+      hasNext: response.data.has_next,
+      nextCursor: response.data.next_cursor,
+    };
   }
 
-  async getAllBuses(includeInactive: boolean = false): Promise<Bus[]> {
-    const response = await this.http.get<ApiResponse<BusDTO[]>>('/buses/', {
-      params: { include_inactive: includeInactive },
+  async getAllBuses(cursor?: number, limit: number = 10, includeInactive: boolean = false): Promise<{ buses: Bus[]; next_cursor: number | null; has_next: boolean }> {
+    const response = await this.http.get<ApiResponse<{
+      buses: BusDTO[];
+      next_cursor: number | null;
+      has_next: boolean;
+    }>>('/buses/', {
+      params: {
+        cursor,
+        limit,
+        include_inactive: includeInactive,
+      },
     });
-    return response.data.map((dto) => this.adapter.toBus(dto));
+
+    return {
+      buses: response.data.buses.map((dto) => this.adapter.toBus(dto)),
+      next_cursor: response.data.next_cursor,
+      has_next: response.data.has_next,
+    };
   }
 
   async getBusesByRoute(routeId: number): Promise<Bus[]> {
