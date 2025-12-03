@@ -521,14 +521,14 @@ class StopService:
         """
         return self.repository.get_by_id(stop_id)
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, cursor: Optional[int] = None, limit: Optional[int] = 100) -> List[Dict[str, Any]]:
         """
         Get all stops.
 
         Returns:
             List of stop dicts
         """
-        return self.repository.get_all()
+        return self.repository.get_all(cursor, limit)
 
     # Update operations
     def update(self, stop_id: int, name: Optional[str] = None) -> Optional[Dict[str, Any]]:

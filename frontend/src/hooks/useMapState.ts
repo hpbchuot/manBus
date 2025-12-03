@@ -29,7 +29,7 @@ export const useMapState = () => {
     setMapState((prev) => ({
       ...prev,
       selectedStop: stop,
-      center: stop ? [stop.location.latitude, stop.location.longitude] : prev.center,
+      center: stop ? [stop.latitude, stop.longitude] : prev.center,
       zoom: stop ? 17 : prev.zoom,
     }));
   }, []);

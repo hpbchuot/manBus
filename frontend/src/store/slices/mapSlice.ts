@@ -94,8 +94,8 @@ const mapSlice = createSlice({
 
       if (action.payload) {
         state.center = [
-          action.payload.location.latitude,
-          action.payload.location.longitude,
+          action.payload.latitude,
+          action.payload.longitude,
         ];
         state.zoom = 17;
       }

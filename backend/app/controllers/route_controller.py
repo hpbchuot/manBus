@@ -567,10 +567,21 @@ def get_stop(stop_id):
 def get_all_stops():
     """Get all stops."""
     try:
+        cursor = request.args.get('cursor', type=int) or None
+        limit = request.args.get('limit', 100, type=int)
         stop_service = get_stop_service()
-        stops = stop_service.get_all()
+        stops = stop_service.get_all(cursor, limit+1)
 
-        return ErrorResponse.success(data=stops)
+        has_next = len(stops) > limit
+        next_cursor = stops[-1]['id'] if has_next else None
+
+        return ErrorResponse.success(
+            data={
+                'stops': stops[:limit],
+                'next_cursor': next_cursor,
+                'has_next': has_next
+            }
+        )
 
     except Exception as e:
         logger.error(f"Failed to get all stops: {str(e)}", exc_info=True)

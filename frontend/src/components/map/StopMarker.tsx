@@ -25,7 +25,7 @@ const StopMarker: React.FC<StopMarkerProps> = ({
 
   return (
     <Marker
-      position={[stop.location.latitude, stop.location.longitude]}
+      position={[stop.latitude, stop.longitude]}
       icon={isSelected ? selectedBusStopIcon : busStopIcon}
       eventHandlers={{
         click: handleClick,
@@ -49,7 +49,7 @@ const StopMarker: React.FC<StopMarkerProps> = ({
           {/* Coordinates */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="caption" color="text.secondary">
-              Tọa độ: {stop.location.latitude.toFixed(5)}, {stop.location.longitude.toFixed(5)}
+              Tọa độ: {stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}
             </Typography>
           </Box>
 

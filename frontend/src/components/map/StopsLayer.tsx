@@ -3,7 +3,6 @@ import { useMap } from 'react-leaflet';
 import StopMarker from './StopMarker';
 import type { Stop } from '@/types/stop';
 import { StopService } from '@/services/api/stopApi';
-import { StopAdapter } from '@/services/adapters/stopAdapter';
 import api from '@/services/api';
 import { toast } from 'react-toastify';
 
@@ -24,8 +23,7 @@ const StopsLayer: React.FC<StopsLayerProps> = ({
   // const [error, setError] = useState<string | null>(null);
 
   // Initialize services
-  const stopAdapter = new StopAdapter();
-  const stopService = new StopService(api, stopAdapter);
+  const stopService = new StopService(api);
 
   // Load stops khi component mount
   useEffect(() => {
@@ -37,7 +35,7 @@ const StopsLayer: React.FC<StopsLayerProps> = ({
     // setError(null);
     try {
       const data = await stopService.getAllStops();
-      setStops(data);
+      setStops(data.stops);
     } catch (err: any) {
       const message = err.response?.data?.message || 'Không thể tải danh sách điểm dừng';
       // setError(message);

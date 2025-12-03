@@ -379,15 +379,15 @@ class StopRepository(BaseRepository):
         query = 'SELECT * FROM fn_get_stop_by_id(%s)'
         return self._execute_query(query, (stop_id,), fetch_one=True)
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, cursor: Optional[int] = None, limit: Optional[int] = 100) -> List[Dict[str, Any]]:
         """
         Get all stops with extracted coordinates.
 
         Returns:
             List of stop dicts with lat/lon coordinates
         """
-        query = 'SELECT * FROM fn_get_all_stops()'
-        return self._execute_query(query, (), fetch_one=False)
+        query = 'SELECT * FROM fn_get_all_stops(%s, %s)'
+        return self._execute_query(query, (cursor, limit), fetch_one=False)
 
     # Update operations
     def update(self, stop_id: int, entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:

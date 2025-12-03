@@ -1,11 +1,10 @@
 import type { IHttpClient } from '@/types/http';
 import type { ApiResponse } from '@/services/api';
-import type { IStopAdapter } from '@/services/adapters/stopAdapter';
+
 import type {
   Stop,
   StopDTO,
   NearestStop,
-  NearestStopDTO,
   CreateStopPayload,
   UpdateStopPayload,
 } from '@/types/stop';
@@ -13,7 +12,7 @@ import type {
 export interface IStopService {
   // Read operations
   getStopById(stopId: number): Promise<Stop>;
-  getAllStops(): Promise<Stop[]>;
+  getAllStops(cursor?: number, limit?: number): Promise<{ stops: Stop[]; next_cursor: number | null; has_next: boolean }>;
   findNearestStops(
     latitude: number,
     longitude: number,
@@ -29,20 +28,33 @@ export interface IStopService {
 
 export class StopService implements IStopService {
   constructor(
-    private http: IHttpClient,
-    private adapter: IStopAdapter
+    private http: IHttpClient
   ) {}
 
   async getStopById(stopId: number): Promise<Stop> {
     const response = await this.http.get<ApiResponse<StopDTO>>(
       `/stops/${stopId}`
     );
-    return this.adapter.toStop(response.data);
+    return response.data;
   }
 
-  async getAllStops(): Promise<Stop[]> {
-    const response = await this.http.get<ApiResponse<StopDTO[]>>('/stops/');
-    return response.data.map((dto) => this.adapter.toStop(dto));
+  async getAllStops(cursor?: number, limit: number = 100): Promise<{ stops: Stop[]; next_cursor: number | null; has_next: boolean }> {
+    const response = await this.http.get<ApiResponse<{
+      stops: Stop[];
+      next_cursor: number | null;
+      has_next: boolean;
+    }>>('/stops', {
+      params: {
+        cursor,
+        limit: limit,
+      },
+    });
+
+    return {
+      stops: response.data.stops,
+      next_cursor: response.data.next_cursor,
+      has_next: response.data.has_next,
+    };
   }
 
   async findNearestStops(
@@ -51,7 +63,7 @@ export class StopService implements IStopService {
     radiusMeters: number = 1000,
     limit: number = 10
   ): Promise<NearestStop[]> {
-    const response = await this.http.get<ApiResponse<NearestStopDTO[]>>(
+    const response = await this.http.get<ApiResponse<NearestStop[]>>(
       '/stops/nearest',
       {
         params: {
@@ -62,7 +74,7 @@ export class StopService implements IStopService {
         },
       }
     );
-    return response.data.map((dto) => this.adapter.toNearestStop(dto));
+    return response.data;
   }
 
   async createStop(payload: CreateStopPayload): Promise<Stop> {
@@ -70,7 +82,7 @@ export class StopService implements IStopService {
       '/stops/',
       payload
     );
-    return this.adapter.toStop(response.data);
+    return response.data;
   }
 
   async updateStop(stopId: number, payload: UpdateStopPayload): Promise<Stop> {
@@ -78,7 +90,7 @@ export class StopService implements IStopService {
       `/stops/${stopId}`,
       payload
     );
-    return this.adapter.toStop(response.data);
+    return response.data;
   }
 
   async deleteStop(stopId: number): Promise<void> {
